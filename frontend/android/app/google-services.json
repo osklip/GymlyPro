@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1035896017078",
+    "project_id": "gymlypro",
+    "storage_bucket": "gymlypro.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1035896017078:android:e66cdce4ca42d926fa1617",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB033Y7JK1X1Hwjjq4HX2w55JD-CUANZgs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
