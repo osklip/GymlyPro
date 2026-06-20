@@ -4,7 +4,7 @@ from data import models
 from data.database import engine
 
 # Importujemy nasz nowy router!
-from web import exercise_router, user_router
+from web import exercise_router, user_router, workout_router
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -17,6 +17,7 @@ app = FastAPI(
 # REJESTRACJA ROUTERA
 app.include_router(exercise_router.router)
 app.include_router(user_router.router)
+app.include_router(workout_router.router)
 
 @app.get("/")
 def read_root():

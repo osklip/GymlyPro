@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
 from datetime import datetime
 from .database import Base
+from sqlalchemy.orm import relationship
 
 class User(Base):
     __tablename__ = "users"
@@ -18,24 +19,6 @@ class Exercise(Base):
     equipment_type = Column(String, nullable=False)
     movement_type = Column(String, nullable=False)
     # Kolumna wskazowkaAI usunięta zgodnie z analizą - wskazówki będą generowane dynamicznie
-
-class WorkoutPlan(Base):
-    __tablename__ = "workout_plans"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String, nullable=False)
-    is_active = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-class PlanExercise(Base):
-    __tablename__ = "plan_exercises"
-    id = Column(Integer, primary_key=True, index=True)
-    plan_id = Column(Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"), nullable=False)
-    exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="RESTRICT"), nullable=False)
-    order = Column(Integer, nullable=False)
-    target_sets = Column(Integer, nullable=False)
-    target_reps = Column(Integer, nullable=False)
-    target_weight = Column(Float, nullable=True) # Inicjalnie może być puste, edytowane przez AI
 
 class WorkoutSession(Base):
     __tablename__ = "workout_sessions"
@@ -90,3 +73,27 @@ class PointHistory(Base):
     points = Column(Integer, nullable=False)
     reason = Column(String, nullable=False)
     granted_at = Column(DateTime, default=datetime.utcnow)
+
+class WorkoutPlan(Base):
+    __tablename__ = "workout_plans"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # NOWE: Relacja, która ładuje ćwiczenia przypisane do tego planu
+    exercises = relationship("PlanExercise", back_populates="plan", cascade="all, delete-orphan")
+
+class PlanExercise(Base):
+    __tablename__ = "plan_exercises"
+    id = Column(Integer, primary_key=True, index=True)
+    plan_id = Column(Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"), nullable=False)
+    exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="RESTRICT"), nullable=False)
+    order = Column(Integer, nullable=False)
+    target_sets = Column(Integer, nullable=False)
+    target_reps = Column(Integer, nullable=False)
+    target_weight = Column(Float, nullable=True)
+
+    # NOWE: Odniesienie z powrotem do planu
+    plan = relationship("WorkoutPlan", back_populates="exercises")
