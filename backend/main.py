@@ -1,5 +1,10 @@
 from fastapi import FastAPI
 import uvicorn
+from data import models
+from data.database import engine
+
+# Wygenerowanie tabel w bazie danych na podstawie modeli
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="GymlyPro API",
