@@ -4,6 +4,7 @@ from data.database import get_db
 from model import schemas
 from service import session_service
 from auth import verify_firebase_token
+from data.models import WorkoutSession as SessionModel
 
 router = APIRouter(prefix="/sessions", tags=["Workout Sessions"])
 
@@ -32,7 +33,6 @@ def add_set(
     if not uid or not isinstance(uid, str):
         raise HTTPException(status_code=401, detail="Brak UID")
     
-    # Tutaj w prawdziwej aplikacji warto sprawdzić, czy sesja należy do tego UID
     return session_service.add_set_to_session(db, session_id, set_data)
 
 @router.post("/{session_id}/finish", response_model=schemas.WorkoutSession)
@@ -51,3 +51,21 @@ def finish_workout_session(
         raise HTTPException(status_code=400, detail="Sesja nie istnieje lub jest już zamknięta")
     
     return finished_session
+
+@router.get("/history", response_model=list[schemas.WorkoutSession])
+def get_workout_history(
+    db: Session = Depends(get_db),
+    firebase_user: dict = Depends(verify_firebase_token)
+):
+    """Zwraca listę zakończonych treningów użytkownika, posortowaną chronologicznie."""
+    uid = firebase_user.get("uid")
+    if not uid or not isinstance(uid, str):
+        raise HTTPException(status_code=401, detail="Brak UID")
+        
+    sessions = (
+        db.query(SessionModel)
+        .filter(SessionModel.user_id == uid, SessionModel.end_time != None)
+        .order_by(SessionModel.start_time.desc())
+        .all()
+    )
+    return sessions

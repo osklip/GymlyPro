@@ -112,3 +112,43 @@ class AiRecommendation(BaseModel):
     exercise_id: int
     suggested_weight: Optional[float]
     message: str
+
+# === SCHEMATY POMIARÓW CIAŁA ===
+class BodyMeasurementBase(BaseModel):
+    weight: float
+    height: float
+    body_fat_percentage: Optional[float] = None
+
+class BodyMeasurementCreate(BodyMeasurementBase):
+    pass
+
+class BodyMeasurement(BodyMeasurementBase):
+    id: int
+    user_id: str
+    measured_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# === SCHEMATY OSIĄGNIĘĆ ===
+class AchievementBase(BaseModel):
+    name: str
+    description: str
+    icon_url: Optional[str] = None
+    required_points: int
+
+class Achievement(AchievementBase):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class UserAchievementBase(BaseModel):
+    user_id: str
+    achievement_id: int
+
+class UserAchievement(UserAchievementBase):
+    earned_at: datetime
+
+    class Config:
+        from_attributes = True

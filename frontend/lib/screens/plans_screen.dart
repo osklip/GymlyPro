@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/workout_provider.dart';
+import 'create_plan_screen.dart';
+import 'plan_details_screen.dart'; // Dodany import ekranu szczegółów
 
 class PlansScreen extends StatefulWidget {
   const PlansScreen({super.key});
@@ -14,7 +16,6 @@ class _PlansScreenState extends State<PlansScreen> {
   @override
   void initState() {
     super.initState();
-    // Pobranie planów asynchronicznie po zbudowaniu pierwszego cyklu widgetu
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<WorkoutProvider>(context, listen: false).fetchPlans();
     });
@@ -46,9 +47,9 @@ class _PlansScreenState extends State<PlansScreen> {
       body: _buildBody(workoutProvider),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // TODO: Nawigacja do ekranu tworzenia planu (Krok 12)
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Kreator planów zostanie wdrożony w kolejnym etapie.')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreatePlanScreen()),
           );
         },
         tooltip: 'Dodaj nowy plan',
@@ -90,7 +91,13 @@ class _PlansScreenState extends State<PlansScreen> {
 
     if (provider.plans.isEmpty) {
       return const Center(
-        child: Text('Brak zdefiniowanych planów treningowych. Kliknij +, aby utworzyć pierwszy plan.'),
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            'Brak zdefiniowanych planów treningowych. Kliknij przycisk +, aby utworzyć pierwszy plan.',
+            textAlign: TextAlign.center,
+          ),
+        ),
       );
     }
 
@@ -115,7 +122,12 @@ class _PlansScreenState extends State<PlansScreen> {
             subtitle: Text('Ilość ćwiczeń w planie: ${plan.exercises.length}'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
             onTap: () {
-              // TODO: Implementacja widoku szczegółów planu
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PlanDetailsScreen(plan: plan),
+                ),
+              );
             },
           ),
         );

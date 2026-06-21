@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-
+import 'providers/session_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/workout_provider.dart';
+import 'providers/exercise_provider.dart';
 import 'screens/login_screen.dart';
-import 'screens/plans_screen.dart';
+import 'providers/ai_provider.dart';
+import 'screens/main_screen.dart';
+import 'providers/user_provider.dart';
+import 'providers/measurement_provider.dart';
+import 'providers/achievement_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +42,12 @@ class GymlyProApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => WorkoutProvider()),
+        ChangeNotifierProvider(create: (_) => ExerciseProvider()),
+        ChangeNotifierProvider(create: (_) => SessionProvider()),
+        ChangeNotifierProvider(create: (_) => AiProvider()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => MeasurementProvider()),
+        ChangeNotifierProvider(create: (_) => AchievementProvider()), // Rejestracja stanu osiągnięć
       ],
       child: MaterialApp(
         title: 'GymlyPro',
@@ -66,7 +77,7 @@ class AuthenticationWrapper extends StatelessWidget {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         if (authProvider.isAuthenticated) {
-          return const PlansScreen();
+          return const MainScreen();
         } else {
           return const LoginScreen();
         }
