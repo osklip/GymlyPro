@@ -58,7 +58,7 @@ class _PlansScreenState extends State<PlansScreen> {
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
     
     try {
-      await sessionProvider.startWorkout(null); // planId = null oznacza Freestyle
+      await sessionProvider.startWorkout(null); 
       if (!context.mounted) return;
       
       Navigator.push(
@@ -124,12 +124,16 @@ class _PlansScreenState extends State<PlansScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // GŁÓWNY BANER: Trening Freestyle
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
           child: Card(
-            elevation: 6, shadowColor: Colors.amberAccent.withOpacity(0.15), color: const Color(0xFF28213E),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.amberAccent.withOpacity(0.6), width: 1.5)),
+            elevation: 6, 
+            shadowColor: Colors.amberAccent.withValues(alpha: 0.15), 
+            color: const Color(0xFF28213E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16), 
+              side: BorderSide(color: Colors.amberAccent.withValues(alpha: 0.6), width: 1.5)
+            ),
             child: InkWell(
               borderRadius: BorderRadius.circular(16),
               onTap: _isStartingFreestyle ? null : () => _startFreestyleWorkout(context),
@@ -143,12 +147,12 @@ class _PlansScreenState extends State<PlansScreen> {
                       child: _isStartingFreestyle ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3)) : const Icon(Icons.bolt, color: Colors.black, size: 32),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Trening Freestyle', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                          const SizedBox(height: 4),
+                          Text('Trening Freestyle', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                          SizedBox(height: 4),
                           Text('Rozpocznij pusty trening ad-hoc i dodawaj ćwiczenia w locie.', style: TextStyle(color: Colors.white70, fontSize: 12)),
                         ],
                       ),
@@ -176,7 +180,10 @@ class _PlansScreenState extends State<PlansScreen> {
                     final plan = provider.plans[index];
                     return Card(
                       elevation: 2, margin: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 4.0),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: plan.isActive ? Colors.greenAccent.withOpacity(0.4) : Colors.transparent, width: 1.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12), 
+                        side: BorderSide(color: plan.isActive ? Colors.greenAccent.withValues(alpha: 0.4) : Colors.transparent, width: 1.5)
+                      ),
                       child: ListTile(
                         leading: Icon(plan.isActive ? Icons.play_circle_fill : Icons.assignment, color: plan.isActive ? Colors.greenAccent : Colors.white70, size: 36),
                         title: Row(

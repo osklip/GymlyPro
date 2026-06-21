@@ -44,7 +44,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
   Widget build(BuildContext context) {
     final exerciseProvider = Provider.of<ExerciseProvider>(context);
 
-    // Dynamiczny filtr łączący zapytanie tekstowe i wybraną partię
     final filteredExercises = exerciseProvider.exercises.where((ex) {
       final matchesSearch = ex.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
                             ex.equipmentType.toLowerCase().contains(_searchQuery.toLowerCase());
@@ -69,7 +68,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Pole wyszukiwania
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: TextField(
@@ -103,7 +101,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
             ),
           ),
 
-          // Pozioma lista wyboru partii mięśniowej
           SizedBox(
             height: 48,
             child: ListView.builder(
@@ -134,7 +131,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
           const SizedBox(height: 8),
           const Divider(height: 1),
 
-          // Wyrenderowana lista wyników
           Expanded(
             child: exerciseProvider.isLoading && exerciseProvider.exercises.isEmpty
                 ? const Center(child: CircularProgressIndicator())
@@ -150,8 +146,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                               return Card(
                                 margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
                                 child: ListTile(
+                                  // Zastosowano .withValues(alpha: ...) zamiast przestarzałego .withOpacity(...)
                                   leading: CircleAvatar(
-                                    backgroundColor: Colors.deepPurpleAccent.withOpacity(0.2),
+                                    backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.2),
                                     child: const Icon(Icons.fitness_center, color: Colors.deepPurpleAccent, size: 20),
                                   ),
                                   title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold)),

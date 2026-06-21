@@ -245,7 +245,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 labelText: 'Wybierz ćwiczenie',
                 border: OutlineInputBorder(),
               ),
-              value: draft.selectedExercise,
+              // Zastosowanie initialValue zamiast przestarzałego value
+              initialValue: draft.selectedExercise,
               items: availableExercises.map((Exercise ex) {
                 return DropdownMenuItem<Exercise>(
                   value: ex,

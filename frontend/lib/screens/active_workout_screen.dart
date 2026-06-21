@@ -25,7 +25,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   final Map<int, int?> _rpeSelectedCache = {};
   final List<int> _activeExerciseIds = [];
   
-  // Stan stopera restytucyjnego
   Timer? _restTimer;
   int _restSecondsRemaining = 0;
   bool _isFinishing = false;
@@ -54,10 +53,9 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     }
     _repsControllers[exId] ??= TextEditingController(text: defaultReps != null ? defaultReps.toString() : '10');
     _weightControllers[exId] ??= TextEditingController(text: defaultWeight != null ? defaultWeight.toString() : '');
-    _rpeSelectedCache[exId] ??= null;
+    // Usunięto niepotrzebne przypisanie 'null' do _rpeSelectedCache[exId]
   }
 
-  // Uruchomienie odliczania czasu odpoczynku po serii
   void _startRestTimer({int seconds = 90}) {
     _restTimer?.cancel();
     setState(() {
@@ -83,7 +81,7 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
   @override
   void dispose() {
-    _restTimer?.cancel(); // Krytyczne zabezpieczenie przed wyciekiem pamięci
+    _restTimer?.cancel();
     for (var controller in _repsControllers.values) {
       controller.dispose();
     }
@@ -139,7 +137,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       await sessionProvider.logSet(newSet);
       _aiSuggestedWeightsCache.remove(exerciseId);
       
-      // Wyzwolenie stopera odpoczynku po pomyślnym zapisie serii
       _startRestTimer(seconds: 90);
 
       if (mounted) {
@@ -172,7 +169,8 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                         itemBuilder: (ctx, idx) {
                           final ex = availableExercises[idx];
                           return ListTile(
-                            leading: CircleAvatar(backgroundColor: Colors.deepPurpleAccent.withOpacity(0.3), child: const Icon(Icons.fitness_center, size: 18, color: Colors.white)),
+                            // Zastosowanie .withValues() zamiast przestarzałego .withOpacity()
+                            leading: CircleAvatar(backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.3), child: const Icon(Icons.fitness_center, size: 18, color: Colors.white)),
                             title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}'), trailing: const Icon(Icons.add_circle, color: Colors.greenAccent, size: 24),
                             onTap: () {
                               Navigator.of(ctx).pop();
@@ -233,7 +231,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       ),
       body: Column(
         children: [
-          // ZADOKOWANY BANER STOPERA PRZERWY
           if (_restSecondsRemaining > 0)
             Container(
               color: Colors.amber.shade900,
@@ -324,7 +321,9 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
                                   Expanded(
                                     flex: 11,
                                     child: DropdownButtonFormField<int?>(
-                                      value: _rpeSelectedCache[exerciseId], decoration: const InputDecoration(labelText: 'RPE', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 12), border: OutlineInputBorder()), dropdownColor: const Color(0xFF1E1E2C), icon: const Icon(Icons.arrow_drop_down, size: 16), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                                      // Zastosowanie initialValue zamiast przestarzałego value
+                                      initialValue: _rpeSelectedCache[exerciseId],
+                                      decoration: const InputDecoration(labelText: 'RPE', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 12), border: OutlineInputBorder()), dropdownColor: const Color(0xFF1E1E2C), icon: const Icon(Icons.arrow_drop_down, size: 16), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                                       items: const [DropdownMenuItem(value: null, child: Text('-')), DropdownMenuItem(value: 6, child: Text('6')), DropdownMenuItem(value: 7, child: Text('7')), DropdownMenuItem(value: 8, child: Text('8')), DropdownMenuItem(value: 9, child: Text('9')), DropdownMenuItem(value: 10, child: Text('10'))],
                                       onChanged: (val) { setState(() { _rpeSelectedCache[exerciseId] = val; }); },
                                     ),

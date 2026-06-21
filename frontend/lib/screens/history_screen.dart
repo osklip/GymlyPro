@@ -102,7 +102,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(8.0),
-        // Zwiększamy licznik o 1, jeśli w toku jest dociąganie kolejnej strony
         itemCount: provider.history.length + (provider.isFetchingMore ? 1 : 0),
         itemBuilder: (context, index) {
           if (index == provider.history.length) {
@@ -119,7 +118,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: ExpansionTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.deepPurpleAccent.withOpacity(0.2),
+                // Zastosowanie nowej metody zgodnie z wytycznymi Fluttera
+                backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.2),
                 child: const Icon(Icons.timeline, color: Colors.deepPurpleAccent),
               ),
               title: Text(
