@@ -56,56 +56,51 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Atlas Ćwiczeń'),
+        title: const Text('Atlas Ćwiczeń', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: Color(0xFF10B981)),
             tooltip: 'Odśwież katalog',
             onPressed: () => exerciseProvider.fetchExercises(),
           ),
+          const SizedBox(width: 8),
         ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(12.0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               controller: _searchController,
+              style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
               decoration: InputDecoration(
                 labelText: 'Wyszukaj ćwiczenie lub sprzęt...',
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
                 filled: true,
-                fillColor: const Color(0xFF1E1E2C),
+                fillColor: const Color(0xFFF1F5F9),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          setState(() {
-                            _searchController.clear();
-                            _searchQuery = '';
-                          });
-                        },
+                        icon: const Icon(Icons.clear, color: Color(0xFF64748B)),
+                        onPressed: () => setState(() {
+                          _searchController.clear();
+                          _searchQuery = '';
+                        }),
                       )
                     : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim();
-                });
-              },
+              onChanged: (val) => setState(() => _searchQuery = val.trim()),
             ),
           ),
 
+          // POZIOMY PASEK FILTRÓW PARTII MIĘŚNIOWYCH
           SizedBox(
-            height: 48,
+            height: 40,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               itemCount: _muscleGroups.length,
               itemBuilder: (context, index) {
                 final group = _muscleGroups[index];
@@ -113,55 +108,60 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8.0),
                   child: FilterChip(
-                    label: Text(group, style: TextStyle(color: isSelected ? Colors.white : Colors.white70)),
+                    label: Text(
+                      group, 
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : const Color(0xFF64748B), 
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                     selected: isSelected,
-                    selectedColor: Colors.deepPurpleAccent,
-                    backgroundColor: const Color(0xFF161620),
+                    selectedColor: const Color(0xFF10B981),
+                    backgroundColor: const Color(0xFFF1F5F9),
                     checkmarkColor: Colors.white,
-                    onSelected: (bool selected) {
-                      setState(() {
-                        _selectedMuscleGroup = group;
-                      });
-                    },
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    onSelected: (_) => setState(() => _selectedMuscleGroup = group),
                   ),
                 );
               },
             ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1),
+          const SizedBox(height: 12),
+          const Divider(color: Color(0xFFE2E8F0), height: 1),
 
+          // WYNIKI WYSZUKIWANIA Z DOLNYM MARGINESEM 120px NA BELKĘ
           Expanded(
             child: exerciseProvider.isLoading && exerciseProvider.exercises.isEmpty
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
                 : exerciseProvider.errorMessage != null && exerciseProvider.exercises.isEmpty
-                    ? Center(child: Text('Błąd bazy: ${exerciseProvider.errorMessage}', style: const TextStyle(color: Colors.red)))
+                    ? Center(child: Text('Błąd: ${exerciseProvider.errorMessage}', style: const TextStyle(color: Color(0xFFEF4444))))
                     : filteredExercises.isEmpty
-                        ? const Center(child: Text('Brak ćwiczeń spełniających wybrane kryteria.'))
+                        ? const Center(child: Text('Brak ćwiczeń spełniających kryteria.', style: TextStyle(color: Color(0xFF94A3B8))))
                         : ListView.builder(
-                            padding: const EdgeInsets.all(8.0),
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
                             itemCount: filteredExercises.length,
                             itemBuilder: (context, index) {
                               final ex = filteredExercises[index];
-                              return Card(
-                                margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
-                                child: ListTile(
-                                  // Zastosowano .withValues(alpha: ...) zamiast przestarzałego .withOpacity(...)
-                                  leading: CircleAvatar(
-                                    backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.2),
-                                    child: const Icon(Icons.fitness_center, color: Colors.deepPurpleAccent, size: 20),
-                                  ),
-                                  title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}'),
-                                  trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.white30),
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => ExerciseDetailsScreen(exercise: ex),
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10.0),
+                                child: Card(
+                                  child: ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
-                                    );
-                                  },
+                                      child: const Icon(Icons.fitness_center, color: Color(0xFF10B981), size: 22),
+                                    ),
+                                    title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF0F172A))),
+                                    subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}', style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500, fontSize: 13)),
+                                    trailing: const Icon(Icons.chevron_right, color: Color(0xFFCBD5E1), size: 24),
+                                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ExerciseDetailsScreen(exercise: ex))),
+                                  ),
                                 ),
                               );
                             },

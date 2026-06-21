@@ -30,7 +30,7 @@ class _ExerciseDetailsScreenState extends State<ExerciseDetailsScreen> {
     return weight * (1 + reps / 30.0);
   }
 
-  // Wektorowy render wykresu progresji siłowej 1RM
+  // Wektorowy render wykresu 1RM dopasowany do jasnej palety
   Widget _build1RmChart(List<WorkoutSession> sessions) {
     final matchingSessions = sessions.where((sess) => sess.sets.any((s) => s.exerciseId == widget.exercise.id)).toList();
 
@@ -40,14 +40,12 @@ class _ExerciseDetailsScreenState extends State<ExerciseDetailsScreen> {
         child: Text(
           'Do wygenerowania wektorowej krzywej progresji siłowej 1RM wymagane są co najmniej 2 odbyte sesje treningowe z tym ćwiczeniem.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white54, fontSize: 13),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
         ),
       );
     }
 
-    // Odwrócenie na układ chronologiczny
     final ascSessions = matchingSessions.reversed.toList();
-
     final List<FlSpot> spots = [];
     double minRm = 999.0;
     double maxRm = 0.0;
@@ -75,55 +73,44 @@ class _ExerciseDetailsScreenState extends State<ExerciseDetailsScreen> {
         height: 200,
         child: LineChart(
           LineChartData(
-            gridData: const FlGridData(show: true, drawVerticalLine: false),
+            gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (v) => const FlLine(color: Color(0xFFF1F5F9), strokeWidth: 1)),
             titlesData: FlTitlesData(
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
-                  showTitles: true,
-                  interval: 1,
+                  showTitles: true, interval: 1,
                   getTitlesWidget: (value, meta) {
                     final idx = value.toInt();
                     if (idx < 0 || idx >= ascSessions.length) return const SizedBox.shrink();
                     final date = ascSessions[idx].startTime;
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 8.0),
-                      child: Text(
-                        '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    );
+                    return Padding(padding: const EdgeInsets.only(top: 8.0), child: Text('${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold)));
                   },
                 ),
               ),
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 40,
-                  getTitlesWidget: (value, meta) {
-                    return Text('${value.toInt()} kg', style: const TextStyle(color: Colors.white54, fontSize: 10));
-                  },
+                  showTitles: true, reservedSize: 40,
+                  getTitlesWidget: (value, meta) => Text('${value.toInt()} kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w600)),
                 ),
               ),
               topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
               rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
             borderData: FlBorderData(show: false),
-            minX: 0,
-            maxX: (ascSessions.length - 1).toDouble(),
-            minY: minY < 0 ? 0 : minY,
-            maxY: maxY,
+            minX: 0, maxX: (ascSessions.length - 1).toDouble(),
+            minY: minY < 0 ? 0 : minY, maxY: maxY,
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (spot) => const Color(0xFF0F172A),
+                getTooltipItems: (spots) => spots.map((s) => LineTooltipItem('${s.y} kg', const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))).toList(),
+              ),
+            ),
             lineBarsData: [
               LineChartBarData(
-                spots: spots,
-                isCurved: true,
-                color: Colors.greenAccent,
-                barWidth: 3,
-                isStrokeCapRound: true,
-                dotData: const FlDotData(show: true),
+                spots: spots, isCurved: true, color: const Color(0xFF0EA5E9), barWidth: 3.5, isStrokeCapRound: true,
+                dotData: FlDotData(show: true, getDotPainter: (s, p, b, i) => FlDotCirclePainter(radius: 4.5, color: const Color(0xFF0EA5E9), strokeWidth: 2, strokeColor: Colors.white)),
                 belowBarData: BarAreaData(
                   show: true,
-                  // Zastosowanie nowoczesnego API eliminującego błąd utraty precyzji
-                  color: Colors.greenAccent.withValues(alpha: 0.15),
+                  gradient: LinearGradient(colors: [const Color(0xFF0EA5E9).withValues(alpha: 0.25), const Color(0xFF0EA5E9).withValues(alpha: 0.0)], begin: Alignment.topCenter, end: Alignment.bottomCenter),
                 ),
               ),
             ],
@@ -157,67 +144,68 @@ class _ExerciseDetailsScreenState extends State<ExerciseDetailsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.exercise.name)),
+      appBar: AppBar(title: Text(widget.exercise.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20))),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
-              elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
-                padding: const EdgeInsets.all(20.0),
+                padding: const EdgeInsets.all(24.0),
                 child: Column(
                   children: [
-                    CircleAvatar(radius: 36, backgroundColor: Colors.deepPurpleAccent, child: Icon(widget.exercise.equipmentType.toLowerCase().contains('hant') ? Icons.fitness_center : Icons.sports_gymnastics, size: 36, color: Colors.white)), const SizedBox(height: 16),
-                    Text(widget.exercise.name, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)), const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.15), shape: BoxShape.circle),
+                      child: Icon(widget.exercise.equipmentType.toLowerCase().contains('hant') ? Icons.fitness_center : Icons.sports_gymnastics, size: 40, color: const Color(0xFF10B981)),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(widget.exercise.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                    const SizedBox(height: 16),
                     Wrap(
-                      alignment: WrapAlignment.center, 
-                      spacing: 8, 
-                      runSpacing: 8, 
+                      alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, 
                       children: [
-                        Chip(label: Text('Partia: ${widget.exercise.targetMuscleGroup}'), backgroundColor: Colors.deepPurple.withValues(alpha: 0.3)), 
-                        Chip(label: Text('Sprzęt: ${widget.exercise.equipmentType}'), backgroundColor: Colors.blue.withValues(alpha: 0.3)), 
-                        Chip(label: Text('Ruch: ${widget.exercise.movementType}'), backgroundColor: Colors.amber.withValues(alpha: 0.3)),
+                        Chip(label: Text('Partia: ${widget.exercise.targetMuscleGroup}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), backgroundColor: const Color(0xFFF1F5F9), side: BorderSide.none), 
+                        Chip(label: Text('Sprzęt: ${widget.exercise.equipmentType}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), backgroundColor: const Color(0xFFF1F5F9), side: BorderSide.none), 
+                        Chip(label: Text('Ruch: ${widget.exercise.movementType}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), backgroundColor: const Color(0xFFF1F5F9), side: BorderSide.none),
                       ],
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             
             Row(
               children: [
-                Expanded(child: Card(color: const Color(0xFF1E1E2C), child: Padding(padding: const EdgeInsets.all(16.0), child: Column(children: [const Text('Rekord Ciężaru', style: TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 8), Text('${maxHistoricalWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.greenAccent))])))),
-                const SizedBox(width: 8),
-                Expanded(child: Card(color: const Color(0xFF1E1E2C), child: Padding(padding: const EdgeInsets.all(16.0), child: Column(children: [const Text('Szacowane 1RM', style: TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 8), Text('${estimated1RM.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent))])))),
+                Expanded(child: Card(color: const Color(0xFFF1F5F9), child: Padding(padding: const EdgeInsets.all(18.0), child: Column(children: [const Text('REKORD CIĘŻARU', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text('${maxHistoricalWeight.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF10B981)))])))),
+                const SizedBox(width: 12),
+                Expanded(child: Card(color: const Color(0xFFF1F5F9), child: Padding(padding: const EdgeInsets.all(18.0), child: Column(children: [const Text('SZACOWANE 1RM', style: TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.bold)), const SizedBox(height: 4), Text('${estimated1RM.toStringAsFixed(1)} kg', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0EA5E9)))])))),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             // KARTA WYKRESU 1RM
             Card(
-              elevation: 4, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              color: const Color(0xFF18221D),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Row(children: [Icon(Icons.trending_up, color: Colors.greenAccent), SizedBox(width: 8), Text('Krzywa Szacowanego 1RM', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]),
-                    const Divider(color: Colors.white10),
-                    if (sessionProvider.isLoading && sessionsWithExercise.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator())) else _build1RmChart(sessionProvider.history),
+                    const Row(children: [Icon(Icons.trending_up, color: Color(0xFF0EA5E9)), SizedBox(width: 8), Text('Progresja Siłowa (1RM)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)))]),
+                    const Divider(color: Color(0xFFF1F5F9), height: 16),
+                    if (sessionProvider.isLoading && sessionsWithExercise.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator(color: Color(0xFF0EA5E9)))) else _build1RmChart(sessionProvider.history),
                   ],
                 ),
               ),
             ),
 
             const SizedBox(height: 24),
-            Text('Ostatnie sesje', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+            const Text('Ostatnie sesje', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF64748B))), const SizedBox(height: 8),
             ...sessionsWithExercise.take(5).map((session) {
               final sets = session.sets.where((s) => s.exerciseId == widget.exercise.id).toList();
-              return Card(margin: const EdgeInsets.only(bottom: 8.0), child: Padding(padding: const EdgeInsets.all(12.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Data: ${session.startTime.day.toString().padLeft(2, '0')}.${session.startTime.month.toString().padLeft(2, '0')}.${session.startTime.year}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurpleAccent, fontSize: 12)), const SizedBox(height: 6), ...sets.map((s) => Padding(padding: const EdgeInsets.symmetric(vertical: 2.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Seria ${s.setNumber}: ${s.reps} powtórzeń', style: const TextStyle(fontSize: 14)), Text('${s.weight} kg', style: const TextStyle(fontWeight: FontWeight.bold))])))])));
+              return Card(margin: const EdgeInsets.only(bottom: 10.0), child: Padding(padding: const EdgeInsets.all(16.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Data sesji: ${session.startTime.day.toString().padLeft(2, '0')}.${session.startTime.month.toString().padLeft(2, '0')}.${session.startTime.year}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF10B981), fontSize: 13)), const SizedBox(height: 8), ...sets.map((s) => Padding(padding: const EdgeInsets.symmetric(vertical: 2.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Seria ${s.setNumber}: ${s.reps} powtórzeń', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155))), Text('${s.weight} kg', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF0F172A)))])))])));
             }),
           ],
         ),

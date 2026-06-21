@@ -58,14 +58,12 @@ class _LoginScreenState extends State<LoginScreen> {
           _nameController.text.trim(),
         );
       }
-      // Po udanym logowaniu/rejestracji nawigacja nastąpi automatycznie
-      // dzięki nasłuchiwaniu zmian stanu w main.dart
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Wystąpił błąd: ${error.toString()}'),
-          backgroundColor: Colors.redAccent,
+          content: Text('Błąd: ${error.toString()}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: const Color(0xFFEF4444),
           duration: const Duration(seconds: 4),
         ),
       );
@@ -81,121 +79,110 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(28.0),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.fitness_center,
-                  size: 80,
-                  color: Colors.deepPurpleAccent,
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.fitness_center,
+                    size: 72,
+                    color: Color(0xFF10B981),
+                  ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
                 Text(
-                  _isLoginMode ? 'Logowanie' : 'Rejestracja',
+                  _isLoginMode ? 'Witaj w GymlyPro' : 'Dołącz do nas!',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _isLoginMode ? 'Zaloguj się, by trenować z nami' : 'Stwórz konto i śledź swoje rekordy',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 32),
                 if (!_isLoginMode)
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nazwa użytkownika',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.person),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: TextFormField(
+                      controller: _nameController,
+                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                      decoration: const InputDecoration(
+                        labelText: 'Nazwa użytkownika',
+                        prefixIcon: Icon(Icons.person_outline, color: Color(0xFF64748B)),
+                      ),
+                      validator: (value) => (value == null || value.trim().length < 3) ? 'Minimum 3 znaki' : null,
                     ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Wprowadź nazwę użytkownika';
-                      }
-                      if (value.trim().length < 3) {
-                        return 'Nazwa musi zawierać minimum 3 znaki';
-                      }
-                      return null;
-                    },
                   ),
-                if (!_isLoginMode) const SizedBox(height: 16),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
                     labelText: 'Adres email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+                    prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF64748B)),
                   ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Wprowadź adres email';
-                    }
-                    if (!value.contains('@') || !value.contains('.')) {
-                      return 'Wprowadź poprawny adres email';
-                    }
-                    return null;
-                  },
+                  validator: (value) => (value == null || !value.contains('@')) ? 'Podaj poprawny email' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _isPasswordObscured,
+                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     labelText: 'Hasło',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.lock),
+                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordObscured
-                            ? Icons.visibility
-                            : Icons.visibility_off,
+                        _isPasswordObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        color: const Color(0xFF64748B),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordObscured = !_isPasswordObscured;
-                        });
-                      },
+                      onPressed: () => setState(() => _isPasswordObscured = !_isPasswordObscured),
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Wprowadź hasło';
-                    }
-                    if (value.length < 6) {
-                      return 'Hasło musi zawierać minimum 6 znaków';
-                    }
-                    return null;
-                  },
+                  validator: (value) => (value == null || value.length < 6) ? 'Minimum 6 znaków' : null,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _submitForm,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: const Color(0xFF10B981),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shadowColor: const Color(0xFF10B981).withValues(alpha: 0.3),
+                    elevation: 8,
                   ),
                   child: _isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
                       : Text(
-                          _isLoginMode ? 'Zaloguj się' : 'Zarejestruj się',
-                          style: const TextStyle(fontSize: 16),
+                          _isLoginMode ? 'ZALOGUJ SIĘ' : 'ZAREJESTRUJ SIĘ',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0),
                         ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 TextButton(
                   onPressed: _isLoading ? null : _switchMode,
                   child: Text(
-                    _isLoginMode
-                        ? 'Nie masz konta? Zarejestruj się'
-                        : 'Masz już konto? Zaloguj się',
+                    _isLoginMode ? 'Nie masz konta? Zarejestruj się' : 'Masz już konto? Zaloguj się',
+                    style: const TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.w700, fontSize: 14),
                   ),
                 ),
               ],

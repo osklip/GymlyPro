@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart' as session_models;
@@ -18,7 +20,7 @@ class ActiveWorkoutScreen extends StatefulWidget {
   State<ActiveWorkoutScreen> createState() => _ActiveWorkoutScreenState();
 }
 
-class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
+class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsBindingObserver {
   final Map<int, TextEditingController> _repsControllers = {};
   final Map<int, TextEditingController> _weightControllers = {};
   final Map<int, double?> _aiSuggestedWeightsCache = {};
@@ -29,65 +31,149 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
   int _restSecondsRemaining = 0;
   bool _isFinishing = false;
 
+  // POPRAWKA: Dodanie modyfikatora 'static'
+  static const String _draftKey = 'gymlypro_workout_draft';
+  Timer? _debounceTimer;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addObserver(this);
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       Provider.of<ExerciseProvider>(context, listen: false).fetchExercises();
-    });
-
-    if (widget.plan != null) {
-      for (var planEx in widget.plan!.exercises) {
-        _initControllersForExercise(
-          planEx.exerciseId, 
-          defaultReps: planEx.targetReps, 
-          defaultWeight: planEx.targetWeight,
-        );
+      
+      if (widget.plan != null) {
+        for (var planEx in widget.plan!.exercises) {
+          _initControllersForExercise(planEx.exerciseId, defaultReps: planEx.targetReps, defaultWeight: planEx.targetWeight);
+        }
       }
+
+      await _restoreDraftFromDisk();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive || state == AppLifecycleState.detached) {
+      _saveDraftToDisk();
     }
   }
 
   void _initControllersForExercise(int exId, {int? defaultReps, double? defaultWeight}) {
-    if (!_activeExerciseIds.contains(exId)) {
-      _activeExerciseIds.add(exId);
+    if (!_activeExerciseIds.contains(exId)) _activeExerciseIds.add(exId);
+    
+    if (!_repsControllers.containsKey(exId)) {
+      final ctrl = TextEditingController(text: defaultReps != null ? defaultReps.toString() : '10');
+      ctrl.addListener(_debouncedSaveDraft);
+      _repsControllers[exId] = ctrl;
     }
-    _repsControllers[exId] ??= TextEditingController(text: defaultReps != null ? defaultReps.toString() : '10');
-    _weightControllers[exId] ??= TextEditingController(text: defaultWeight != null ? defaultWeight.toString() : '');
-    // Usunięto niepotrzebne przypisanie 'null' do _rpeSelectedCache[exId]
+
+    if (!_weightControllers.containsKey(exId)) {
+      final ctrl = TextEditingController(text: defaultWeight != null ? defaultWeight.toString() : '');
+      ctrl.addListener(_debouncedSaveDraft);
+      _weightControllers[exId] = ctrl;
+    }
+  }
+
+  void _debouncedSaveDraft() {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 600), _saveDraftToDisk);
+  }
+
+  Future<void> _saveDraftToDisk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final repsMap = _repsControllers.map((k, v) => MapEntry(k.toString(), v.text));
+      final weightsMap = _weightControllers.map((k, v) => MapEntry(k.toString(), v.text));
+      final rpesMap = _rpeSelectedCache.map((k, v) => MapEntry(k.toString(), v));
+
+      final draftData = {
+        'active_ids': _activeExerciseIds,
+        'reps': repsMap,
+        'weights': weightsMap,
+        'rpes': rpesMap,
+        'timer_sec': _restSecondsRemaining,
+        'timer_timestamp': _restSecondsRemaining > 0 ? DateTime.now().millisecondsSinceEpoch : null,
+      };
+
+      await prefs.setString(_draftKey, json.encode(draftData));
+    } catch (e) {
+      debugPrint('Błąd zrzutu stanu do cache: $e');
+    }
+  }
+
+  Future<void> _restoreDraftFromDisk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_draftKey);
+      if (jsonStr == null) return;
+
+      final data = json.decode(jsonStr) as Map<String, dynamic>;
+
+      final savedIds = (data['active_ids'] as List<dynamic>?)?.map((e) => e as int).toList() ?? [];
+      for (var id in savedIds) {
+        _initControllersForExercise(id);
+      }
+
+      final repsMap = data['reps'] as Map<String, dynamic>? ?? {};
+      final weightsMap = data['weights'] as Map<String, dynamic>? ?? {};
+      final rpesMap = data['rpes'] as Map<String, dynamic>? ?? {};
+
+      for (var id in _activeExerciseIds) {
+        final idStr = id.toString();
+        if (repsMap.containsKey(idStr)) _repsControllers[id]?.text = repsMap[idStr].toString();
+        if (weightsMap.containsKey(idStr)) _weightControllers[id]?.text = weightsMap[idStr].toString();
+        if (rpesMap.containsKey(idStr)) _rpeSelectedCache[id] = rpesMap[idStr] as int?;
+      }
+
+      final targetSec = data['timer_sec'] as int? ?? 0;
+      final startMs = data['timer_timestamp'] as int?;
+
+      if (targetSec > 0 && startMs != null) {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final diffSec = ((nowMs - startMs) / 1000).floor();
+        final realSecRemaining = targetSec - diffSec;
+
+        if (realSecRemaining > 0) {
+          _startRestTimer(seconds: realSecRemaining);
+        }
+      }
+
+      setState(() {});
+    } catch (e) {
+      debugPrint('Błąd odczytu draftu: $e');
+    }
   }
 
   void _startRestTimer({int seconds = 90}) {
     _restTimer?.cancel();
-    setState(() {
-      _restSecondsRemaining = seconds;
-    });
+    setState(() => _restSecondsRemaining = seconds);
+    _saveDraftToDisk();
+    
     _restTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_restSecondsRemaining > 0) {
-        setState(() {
-          _restSecondsRemaining--;
-        });
+        setState(() => _restSecondsRemaining--);
       } else {
         timer.cancel();
+        _saveDraftToDisk();
       }
     });
   }
 
   void _stopRestTimer() {
     _restTimer?.cancel();
-    setState(() {
-      _restSecondsRemaining = 0;
-    });
+    setState(() => _restSecondsRemaining = 0);
+    _saveDraftToDisk();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _debounceTimer?.cancel();
     _restTimer?.cancel();
-    for (var controller in _repsControllers.values) {
-      controller.dispose();
-    }
-    for (var controller in _weightControllers.values) {
-      controller.dispose();
-    }
+    for (var c in _repsControllers.values) { c.dispose(); }
+    for (var c in _weightControllers.values) { c.dispose(); }
     super.dispose();
   }
 
@@ -100,26 +186,18 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       if (recommendation.suggestedWeight != null) {
         _weightControllers[exerciseId]?.text = recommendation.suggestedWeight.toString();
         _aiSuggestedWeightsCache[exerciseId] = recommendation.suggestedWeight;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI: ${recommendation.message}'), backgroundColor: Colors.green, duration: const Duration(seconds: 4)));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI: ${recommendation.message}'), backgroundColor: Colors.blueGrey, duration: const Duration(seconds: 4)));
+        _saveDraftToDisk();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI: ${recommendation.message}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF0EA5E9), duration: const Duration(seconds: 3)));
       }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd modułu AI: $e'), backgroundColor: Colors.redAccent));
-    }
+    } catch (_) {}
   }
 
   Future<void> _saveSet(int exerciseId) async {
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
-    
     final repsText = _repsControllers[exerciseId]?.text.trim() ?? '';
     final weightText = _weightControllers[exerciseId]?.text.trim().replaceAll(',', '.') ?? '';
 
-    if (repsText.isEmpty || weightText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uzupełnij powtórzenia i obciążenie.'), backgroundColor: Colors.redAccent));
-      return;
-    }
+    if (repsText.isEmpty || weightText.isEmpty) return;
 
     final reps = int.tryParse(repsText) ?? 0;
     final weight = double.tryParse(weightText) ?? 0.0;
@@ -136,49 +214,38 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     try {
       await sessionProvider.logSet(newSet);
       _aiSuggestedWeightsCache.remove(exerciseId);
-      
       _startRestTimer(seconds: 90);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Seria zapisana. Uruchomiono stoper.'), duration: Duration(seconds: 1), backgroundColor: Colors.green));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: Colors.redAccent));
-      }
-    }
+    } catch (_) {}
   }
 
   void _showAddExerciseModal(BuildContext context, ExerciseProvider provider) {
     showModalBottomSheet(
-      context: context, isScrollControlled: true, backgroundColor: const Color(0xFF1E1E2C),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      context: context, isScrollControlled: true, backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.75, maxChildSize: 0.95, minChildSize: 0.5, expand: false,
         builder: (ctx, scrollController) {
           final availableExercises = provider.exercises.where((ex) => !_activeExerciseIds.contains(ex.id)).toList();
           return Column(
             children: [
-              Padding(padding: const EdgeInsets.all(16.0), child: Text('Dodaj ćwiczenie z Atlasu', style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.amberAccent))),
-              const Divider(height: 1),
+              const Padding(padding: EdgeInsets.all(20.0), child: Text('Dodaj ćwiczenie', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)))),
+              const Divider(color: Color(0xFFE2E8F0), height: 1),
               Expanded(
-                child: availableExercises.isEmpty
-                    ? const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text('Wszystkie dostępne ćwiczenia z bazy zostały już dodane do tego treningu.', textAlign: TextAlign.center)))
-                    : ListView.builder(
-                        controller: scrollController, itemCount: availableExercises.length,
-                        itemBuilder: (ctx, idx) {
-                          final ex = availableExercises[idx];
-                          return ListTile(
-                            // Zastosowanie .withValues() zamiast przestarzałego .withOpacity()
-                            leading: CircleAvatar(backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.3), child: const Icon(Icons.fitness_center, size: 18, color: Colors.white)),
-                            title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}'), trailing: const Icon(Icons.add_circle, color: Colors.greenAccent, size: 24),
-                            onTap: () {
-                              Navigator.of(ctx).pop();
-                              setState(() { _initControllersForExercise(ex.id); });
-                            },
-                          );
-                        },
-                      ),
+                child: ListView.builder(
+                  controller: scrollController, itemCount: availableExercises.length,
+                  itemBuilder: (ctx, idx) {
+                    final ex = availableExercises[idx];
+                    return ListTile(
+                      leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.fitness_center, color: Color(0xFF10B981), size: 20)),
+                      title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))), subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}', style: const TextStyle(color: Color(0xFF64748B))), trailing: const Icon(Icons.add_circle, color: Color(0xFF10B981), size: 28),
+                      onTap: () { 
+                        Navigator.of(ctx).pop(); 
+                        setState(() { _initControllersForExercise(ex.id); }); 
+                        _saveDraftToDisk();
+                      },
+                    );
+                  },
+                ),
               ),
             ],
           );
@@ -189,25 +256,19 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
 
   Future<void> _finishWorkout() async {
     _stopRestTimer();
-    setState(() { _isFinishing = true; });
+    setState(() => _isFinishing = true);
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
     
     try {
       final finishedSession = await sessionProvider.finishWorkout();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey); 
+
       if (!mounted) return;
       Navigator.of(context).pop(); 
-      showDialog(
-        context: context, barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Trening Zakończony', style: TextStyle(color: Colors.green)),
-          content: Text('Objętość całkowita: ${finishedSession?.totalVolume} kg\nZdobyte punkty: ${finishedSession?.earnedPoints}'),
-          actions: [TextButton(onPressed: () { Navigator.of(context).pop(); Navigator.of(context).pop(); }, child: const Text('OK'))],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.redAccent));
-      setState(() { _isFinishing = false; });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Trening zapisany! Zdobyte punkty: +${finishedSession?.earnedPoints}', style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF10B981)));
+    } catch (_) {
+      if (mounted) setState(() => _isFinishing = false);
     }
   }
 
@@ -216,123 +277,92 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
     final exerciseProvider = Provider.of<ExerciseProvider>(context);
     final sessionProvider = Provider.of<SessionProvider>(context);
     final aiProvider = Provider.of<AiProvider>(context);
-
-    if (sessionProvider.isLoading && sessionProvider.currentSession == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
     final isFreestyle = widget.plan == null;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isFreestyle ? 'Trening Freestyle' : 'Trening: ${widget.plan!.name}', style: const TextStyle(color: Colors.greenAccent, fontSize: 18, fontWeight: FontWeight.bold)),
+        title: Text(isFreestyle ? 'Freestyle' : widget.plan!.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
         automaticallyImplyLeading: false,
-        actions: [IconButton(icon: const Icon(Icons.add_task, color: Colors.amberAccent), tooltip: 'Dodaj ćwiczenie', onPressed: () => _showAddExerciseModal(context, exerciseProvider))],
+        actions: [
+          OutlinedButton.icon(icon: const Icon(Icons.add, size: 18), label: const Text('Ćwiczenie', style: TextStyle(fontWeight: FontWeight.bold)), style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF10B981), side: const BorderSide(color: Color(0xFF10B981), width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)), onPressed: () => _showAddExerciseModal(context, exerciseProvider)),
+          const SizedBox(width: 16),
+        ],
       ),
       body: Column(
         children: [
           if (_restSecondsRemaining > 0)
-            Container(
-              color: Colors.amber.shade900,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.timer, color: Colors.black, size: 24),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Odpoczynek: ${_restSecondsRemaining ~/ 60}:${(_restSecondsRemaining % 60).toString().padLeft(2, '0')}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black, fontSize: 16),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      OutlinedButton(
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.black, side: const BorderSide(color: Colors.black), visualDensity: VisualDensity.compact),
-                        onPressed: () => _startRestTimer(seconds: _restSecondsRemaining + 30),
-                        child: const Text('+30s', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(icon: const Icon(Icons.close, color: Colors.black), visualDensity: VisualDensity.compact, onPressed: _stopRestTimer),
-                    ],
-                  )
-                ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: BoxDecoration(color: const Color(0xFF0EA5E9), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: const Color(0xFF0EA5E9).withValues(alpha: 0.25), blurRadius: 12, offset: const Offset(0, 4))]),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [const Icon(Icons.timer, color: Colors.white, size: 24), const SizedBox(width: 10), Text('Odpoczynek: ${_restSecondsRemaining ~/ 60}:${(_restSecondsRemaining % 60).toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 16))]),
+                    Row(children: [ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF0EA5E9), minimumSize: const Size(50, 32), padding: const EdgeInsets.symmetric(horizontal: 10), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), onPressed: () => _startRestTimer(seconds: _restSecondsRemaining + 30), child: const Text('+30s', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12))), const SizedBox(width: 8), IconButton(icon: const Icon(Icons.close, color: Colors.white, size: 20), visualDensity: VisualDensity.compact, onPressed: _stopRestTimer)])
+                  ],
+                ),
               ),
             ),
 
           Expanded(
             child: _activeExerciseIds.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.bolt, size: 80, color: Colors.amberAccent), const SizedBox(height: 16),
-                          const Text('Trening Freestyle', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
-                          const Text('Brak przypisanych ruchów. Wybieraj ćwiczenia z Atlasu w trakcie treningu.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)), const SizedBox(height: 32),
-                          ElevatedButton.icon(icon: const Icon(Icons.add, color: Colors.black), label: const Text('Dodaj pierwsze ćwiczenie', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: Colors.amberAccent), onPressed: () => _showAddExerciseModal(context, exerciseProvider))
-                        ],
-                      ),
-                    ),
-                  )
+                ? Center(child: Text('Dodaj pierwsze ćwiczenie z górnego paska.', style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w600)))
                 : ListView.builder(
-                    padding: const EdgeInsets.all(12.0), itemCount: _activeExerciseIds.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    itemCount: _activeExerciseIds.length,
                     itemBuilder: (context, index) {
                       final exerciseId = _activeExerciseIds[index];
-                      final matchedExercises = exerciseProvider.exercises.where((e) => e.id == exerciseId).toList();
-                      final exData = matchedExercises.isNotEmpty ? matchedExercises.first : null;
+                      final matched = exerciseProvider.exercises.where((e) => e.id == exerciseId).toList();
+                      final exData = matched.isNotEmpty ? matched.first : null;
                       final loggedSets = sessionProvider.currentSession?.sets.where((s) => s.exerciseId == exerciseId).toList() ?? [];
-                      final exerciseName = exData?.name ?? 'Ładowanie...';
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16.0),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(child: Text('${index + 1}. $exerciseName', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
-                                  IconButton(icon: aiProvider.isLoading(exerciseId) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Colors.amber), onPressed: aiProvider.isLoading(exerciseId) ? null : () => _applyAiSuggestion(exerciseId)),
-                                ],
-                              ),
-                              const Divider(),
-                              ...loggedSets.map((s) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 2.0),
-                                child: Row(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Icon(Icons.check_circle, color: Colors.green, size: 18), const SizedBox(width: 8),
-                                    Expanded(child: Row(children: [Text('Seria ${s.setNumber}: ${s.reps}x ${s.weight}kg${s.rpe != null ? ' @ RPE ${s.rpe}' : ''}', style: const TextStyle(color: Colors.white70)), if (s.aiSuggestedWeight != null) const Padding(padding: EdgeInsets.only(left: 6.0), child: Icon(Icons.auto_awesome, color: Colors.amber, size: 14))])),
-                                    IconButton(icon: const Icon(Icons.close, color: Colors.redAccent, size: 18), visualDensity: VisualDensity.compact, onPressed: s.id == null ? null : () async { try { await sessionProvider.removeSet(s.id!); } catch (_) {} }),
+                                    Expanded(child: Text('${index + 1}. ${exData?.name ?? 'Ładowanie...'}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF0F172A)))),
+                                    IconButton(icon: aiProvider.isLoading(exerciseId) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF10B981), strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Color(0xFF0EA5E9)), tooltip: 'Rekomendacja AI', onPressed: aiProvider.isLoading(exerciseId) ? null : () => _applyAiSuggestion(exerciseId)),
                                   ],
                                 ),
-                              )),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(flex: 12, child: TextFormField(controller: _repsControllers[exerciseId], decoration: const InputDecoration(labelText: 'Powt.', isDense: true, border: OutlineInputBorder()), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly])), const SizedBox(width: 6),
-                                  Expanded(flex: 12, child: TextFormField(controller: _weightControllers[exerciseId], decoration: const InputDecoration(labelText: 'Kg', isDense: true, border: OutlineInputBorder()), keyboardType: const TextInputType.numberWithOptions(decimal: true))), const SizedBox(width: 6),
-                                  Expanded(
-                                    flex: 11,
-                                    child: DropdownButtonFormField<int?>(
-                                      // Zastosowanie initialValue zamiast przestarzałego value
-                                      initialValue: _rpeSelectedCache[exerciseId],
-                                      decoration: const InputDecoration(labelText: 'RPE', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 12), border: OutlineInputBorder()), dropdownColor: const Color(0xFF1E1E2C), icon: const Icon(Icons.arrow_drop_down, size: 16), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                      items: const [DropdownMenuItem(value: null, child: Text('-')), DropdownMenuItem(value: 6, child: Text('6')), DropdownMenuItem(value: 7, child: Text('7')), DropdownMenuItem(value: 8, child: Text('8')), DropdownMenuItem(value: 9, child: Text('9')), DropdownMenuItem(value: 10, child: Text('10'))],
-                                      onChanged: (val) { setState(() { _rpeSelectedCache[exerciseId] = val; }); },
-                                    ),
+                                const Divider(color: Color(0xFFF1F5F9), height: 16),
+                                ...loggedSets.map((s) => Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: Row(
+                                    children: [
+                                      Container(padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.15), shape: BoxShape.circle), child: const Icon(Icons.check, color: Color(0xFF10B981), size: 14)), const SizedBox(width: 10),
+                                      Expanded(child: Text('Seria ${s.setNumber}: ${s.reps}x ${s.weight} kg${s.rpe != null ? ' @ RPE ${s.rpe}' : ''}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF334155), fontSize: 14))),
+                                      IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 18), visualDensity: VisualDensity.compact, onPressed: s.id == null ? null : () => sessionProvider.removeSet(s.id!)),
+                                    ],
                                   ),
-                                  const SizedBox(width: 6),
-                                  ElevatedButton(onPressed: () => _saveSet(exerciseId), style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurpleAccent, padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14)), child: const Icon(Icons.add, color: Colors.white)),
-                                ],
-                              ),
-                            ],
+                                )),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(flex: 12, child: TextFormField(controller: _repsControllers[exerciseId], decoration: const InputDecoration(labelText: 'Powt.', isDense: true), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) => _debouncedSaveDraft())), const SizedBox(width: 8),
+                                    Expanded(flex: 12, child: TextFormField(controller: _weightControllers[exerciseId], decoration: const InputDecoration(labelText: 'Kg', isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true), onChanged: (_) => _debouncedSaveDraft())), const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 11,
+                                      child: DropdownButtonFormField<int?>(
+                                        initialValue: _rpeSelectedCache[exerciseId], decoration: const InputDecoration(labelText: 'RPE', isDense: true, contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 16)), dropdownColor: Colors.white, icon: const Icon(Icons.keyboard_arrow_down, size: 16), style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 14),
+                                        items: const [DropdownMenuItem(value: null, child: Text('-')), DropdownMenuItem(value: 6, child: Text('6')), DropdownMenuItem(value: 7, child: Text('7')), DropdownMenuItem(value: 8, child: Text('8')), DropdownMenuItem(value: 9, child: Text('9')), DropdownMenuItem(value: 10, child: Text('10'))],
+                                        onChanged: (v) { setState(() => _rpeSelectedCache[exerciseId] = v); _saveDraftToDisk(); },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), onPressed: () => _saveSet(exerciseId), child: const Icon(Icons.add, color: Colors.white, size: 22)),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );
@@ -343,14 +373,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              OutlinedButton.icon(icon: const Icon(Icons.add), label: const Text('DODAJ ĆWICZENIE Z ATLASU'), style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), foregroundColor: Colors.amberAccent, side: const BorderSide(color: Colors.amberAccent)), onPressed: () => _showAddExerciseModal(context, exerciseProvider)),
-              const SizedBox(height: 8),
-              ElevatedButton(onPressed: _isFinishing ? null : _finishWorkout, style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 16)), child: _isFinishing ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white)) : const Text('ZAKOŃCZ TRENING', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))),
-            ],
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+            onPressed: _isFinishing ? null : _finishWorkout,
+            child: _isFinishing ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white)) : const Text('ZAKOŃCZ TRENING', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0)),
           ),
         ),
       ),

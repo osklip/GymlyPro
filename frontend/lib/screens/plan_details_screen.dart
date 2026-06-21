@@ -27,161 +27,90 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   }
 
   Future<void> _startWorkout() async {
-    setState(() {
-      _isStarting = true;
-    });
-
+    setState(() => _isStarting = true);
     try {
       await Provider.of<SessionProvider>(context, listen: false).startWorkout(widget.plan.id);
-      
       if (!mounted) return;
-      
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => ActiveWorkoutScreen(plan: widget.plan)),
-      );
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ActiveWorkoutScreen(plan: widget.plan)));
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Nie udało się rozpocząć sesji: $e'), backgroundColor: Colors.redAccent),
-      );
-      setState(() {
-        _isStarting = false;
-      });
+      if (mounted) setState(() => _isStarting = false);
     }
-  }
-
-  void _confirmDeletion(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Potwierdzenie usunięcia', style: TextStyle(color: Colors.redAccent)),
-        content: Text('Czy na pewno chcesz usunąć plan "${widget.plan.name}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Anuluj')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              if (widget.plan.id != null) {
-                try {
-                  await Provider.of<WorkoutProvider>(context, listen: false).removePlan(widget.plan.id!);
-                  if (!context.mounted) return;
-                  Navigator.of(context).pop(); // Powrót do listy planów
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Plan usunięty.'), backgroundColor: Colors.green));
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.redAccent));
-                }
-              }
-            },
-            child: const Text('Usuń'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final exerciseProvider = Provider.of<ExerciseProvider>(context);
     final workoutProvider = Provider.of<WorkoutProvider>(context);
-
-    // Znalezienie aktualnej instancji planu w Providerze (w celu odzwierciedlenia zmian is_active w czasie rzeczywistym)
-    final currentPlan = workoutProvider.plans.firstWhere(
-      (p) => p.id == widget.plan.id,
-      orElse: () => widget.plan,
-    );
+    // POPRAWKA: Zmiana "orelse" na poprawne "orElse"
+    final currentPlan = workoutProvider.plans.firstWhere((p) => p.id == widget.plan.id, orElse: () => widget.plan);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(currentPlan.name),
+        title: Text(currentPlan.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
         actions: [
           IconButton(
-            icon: Icon(currentPlan.isActive ? Icons.star : Icons.star_border),
-            color: Colors.amber,
+            icon: Icon(currentPlan.isActive ? Icons.star : Icons.star_border, size: 28), color: const Color(0xFF10B981),
             tooltip: currentPlan.isActive ? 'Dezaktywuj plan' : 'Ustaw jako aktywny',
-            onPressed: () async {
-              if (currentPlan.id != null) {
-                try {
-                  await workoutProvider.toggleActiveStatus(currentPlan.id!);
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.redAccent));
-                }
-              }
-            },
+            onPressed: () async { if (currentPlan.id != null) await workoutProvider.toggleActiveStatus(currentPlan.id!); },
           ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            color: Colors.redAccent,
-            tooltip: 'Usuń plan',
-            onPressed: () => _confirmDeletion(context),
-          ),
+          const SizedBox(width: 8),
         ],
       ),
-      body: exerciseProvider.isLoading && exerciseProvider.exercises.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : _buildBody(context, exerciseProvider, currentPlan),
+      body: exerciseProvider.isLoading ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981))) : _buildBody(context, exerciseProvider, currentPlan),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(vertical: 18), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+            onPressed: (currentPlan.exercises.isEmpty || _isStarting) ? null : _startWorkout,
+            child: _isStarting ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white)) : const Text('ROZPOCZNIJ TEN TRENING', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0)),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildBody(BuildContext context, ExerciseProvider provider, WorkoutPlan plan) {
-    if (provider.errorMessage != null && provider.exercises.isEmpty) {
-      return Center(child: Text('Błąd: ${provider.errorMessage}', style: const TextStyle(color: Colors.redAccent)));
-    }
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    if (provider.errorMessage != null) return Center(child: Text('Błąd: ${provider.errorMessage}'));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Przegląd ćwiczeń', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              if (plan.isActive)
-                const Chip(label: Text('PLAN AKTYWNY', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)), backgroundColor: Colors.greenAccent),
+              const Text('PRZYPISANE ĆWICZENIA', style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w900, fontSize: 12)),
+              if (plan.isActive) Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFD1FAE5), borderRadius: BorderRadius.circular(8)), child: const Text('PLAN DOMYŚLNY', style: TextStyle(color: Color(0xFF065F46), fontWeight: FontWeight.w900, fontSize: 10))),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: plan.exercises.isEmpty
-                ? const Center(child: Text('Ten plan nie zawiera żadnych ćwiczeń.'))
-                : ListView.builder(
-                    itemCount: plan.exercises.length,
-                    itemBuilder: (context, index) {
-                      final planEx = plan.exercises[index];
-                      final matchedExercises = provider.exercises.where((e) => e.id == planEx.exerciseId).toList();
-                      final exerciseName = matchedExercises.isNotEmpty ? matchedExercises.first.name : 'Nieznane ćwiczenie';
+        ),
+        Expanded(
+          child: plan.exercises.isEmpty
+              ? const Center(child: Text('Ten plan nie zawiera ćwiczeń.', style: TextStyle(color: Color(0xFF94A3B8))))
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
+                  itemCount: plan.exercises.length,
+                  itemBuilder: (context, index) {
+                    final planEx = plan.exercises[index];
+                    final matched = provider.exercises.where((e) => e.id == planEx.exerciseId).toList();
+                    final exName = matched.isNotEmpty ? matched.first.name : 'Ładowanie...';
 
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 6.0),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10.0),
+                      child: Card(
                         child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.deepPurpleAccent,
-                            child: Text('${planEx.order}', style: const TextStyle(color: Colors.white)),
-                          ),
-                          title: Text(exerciseName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Serie: ${planEx.targetSets} | Powtórzenia: ${planEx.targetReps}'
-                              '${planEx.targetWeight != null ? ' | Cel: ${planEx.targetWeight} kg' : ''}'),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          leading: Container(width: 36, height: 36, alignment: Alignment.center, decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)), child: Text('${planEx.order}', style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A), fontSize: 15))),
+                          title: Text(exName, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A), fontSize: 16)),
+                          subtitle: Text('Serie: ${planEx.targetSets} | Powt.: ${planEx.targetReps}${planEx.targetWeight != null ? ' | Cel: ${planEx.targetWeight} kg' : ''}', style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
-                      );
-                    },
-                  ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: (plan.exercises.isEmpty || _isStarting) ? null : _startWorkout,
-            icon: _isStarting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.play_arrow),
-            label: Text(_isStarting ? 'Inicjalizacja środowiska...' : 'Rozpocznij trening', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: Colors.green, foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

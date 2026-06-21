@@ -36,6 +36,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  // Wektorowy render wykresu dopasowany do jasnego motywu
   Widget _buildWeightChart(List<BodyMeasurement> measurements) {
     if (measurements.length < 2) {
       return const Padding(
@@ -43,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Text(
           'Zarejestruj co najmniej 2 pomiary wagi w różnych dniach, aby wygenerować wektorowy wykres wahań masy ciała.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.white54, fontSize: 13),
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
         ),
       );
     }
@@ -70,7 +71,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         height: 200,
         child: LineChart(
           LineChartData(
-            gridData: const FlGridData(show: true, drawVerticalLine: false),
+            gridData: FlGridData(
+              show: true, 
+              drawVerticalLine: false,
+              getDrawingHorizontalLine: (value) => const FlLine(color: Color(0xFFF1F5F9), strokeWidth: 1),
+            ),
             titlesData: FlTitlesData(
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
@@ -85,7 +90,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(
                         '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.bold),
                       ),
                     );
                   },
@@ -96,7 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   showTitles: true,
                   reservedSize: 36,
                   getTitlesWidget: (value, meta) {
-                    return Text('${value.toInt()} kg', style: const TextStyle(color: Colors.white54, fontSize: 10));
+                    return Text('${value.toInt()} kg', style: const TextStyle(color: Color(0xFF64748B), fontSize: 10, fontWeight: FontWeight.w600));
                   },
                 ),
               ),
@@ -108,18 +113,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
             maxX: (ascList.length - 1).toDouble(),
             minY: minY < 0 ? 0 : minY,
             maxY: maxY,
+            lineTouchData: LineTouchData(
+              touchTooltipData: LineTouchTooltipData(
+                getTooltipColor: (spot) => const Color(0xFF0F172A),
+                getTooltipItems: (spots) => spots.map((s) => LineTooltipItem('${s.y} kg', const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12))).toList(),
+              ),
+            ),
             lineBarsData: [
               LineChartBarData(
                 spots: spots,
                 isCurved: true,
-                color: Colors.amberAccent,
-                barWidth: 3,
+                color: const Color(0xFF10B981),
+                barWidth: 3.5,
                 isStrokeCapRound: true,
-                dotData: const FlDotData(show: true),
+                dotData: FlDotData(
+                  show: true,
+                  getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 4.5, color: const Color(0xFF10B981), strokeWidth: 2, strokeColor: Colors.white),
+                ),
                 belowBarData: BarAreaData(
                   show: true,
-                  // Zastosowanie nowoczesnego API eliminującego błąd utraty precyzji
-                  color: Colors.amberAccent.withValues(alpha: 0.15),
+                  gradient: LinearGradient(
+                    colors: [const Color(0xFF10B981).withValues(alpha: 0.25), const Color(0xFF10B981).withValues(alpha: 0.0)],
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  ),
                 ),
               ),
             ],
@@ -141,68 +157,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
+      context: context, isScrollControlled: true, backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          left: 16.0, right: 16.0, top: 24.0,
-        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 24.0, right: 24.0, top: 24.0),
         child: Form(
           key: formKey,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Rejestracja pomiaru', style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: weightController,
-                decoration: const InputDecoration(labelText: 'Waga (kg)', border: OutlineInputBorder()),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (val) => (val == null || val.trim().isEmpty || double.tryParse(val.replaceAll(',', '.')) == null) ? 'Błąd formatu' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: heightController,
-                decoration: const InputDecoration(labelText: 'Wzrost (cm)', border: OutlineInputBorder()),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                validator: (val) => (val == null || val.trim().isEmpty || double.tryParse(val.replaceAll(',', '.')) == null) ? 'Błąd formatu' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: bfController,
-                decoration: const InputDecoration(labelText: 'Tkanka tłuszczowa % (Opcjonalnie)', border: OutlineInputBorder()),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: 24),
+              const Text('Nowy pomiar ciała', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))), const SizedBox(height: 16),
+              TextFormField(controller: weightController, decoration: const InputDecoration(labelText: 'Waga (kg)'), keyboardType: const TextInputType.numberWithOptions(decimal: true), validator: (v) => (v == null || v.trim().isEmpty || double.tryParse(v.replaceAll(',', '.')) == null) ? 'Błąd' : null), const SizedBox(height: 12),
+              TextFormField(controller: heightController, decoration: const InputDecoration(labelText: 'Wzrost (cm)'), keyboardType: const TextInputType.numberWithOptions(decimal: true), validator: (v) => (v == null || v.trim().isEmpty || double.tryParse(v.replaceAll(',', '.')) == null) ? 'Błąd' : null), const SizedBox(height: 12),
+              TextFormField(controller: bfController, decoration: const InputDecoration(labelText: 'Tkanka tłuszczowa % (Opcjonalnie)'), keyboardType: const TextInputType.numberWithOptions(decimal: true)), const SizedBox(height: 24),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () async {
                   if (formKey.currentState?.validate() ?? false) {
-                    final weight = double.parse(weightController.text.replaceAll(',', '.'));
-                    final height = double.parse(heightController.text.replaceAll(',', '.'));
+                    final w = double.parse(weightController.text.replaceAll(',', '.'));
+                    final h = double.parse(heightController.text.replaceAll(',', '.'));
                     final bfText = bfController.text.trim();
                     final bf = bfText.isNotEmpty ? double.parse(bfText.replaceAll(',', '.')) : null;
-
                     try {
-                      await measurementProvider.addMeasurement(BodyMeasurement(
-                        weight: weight, height: height, bodyFatPercentage: bf,
-                      ));
+                      await measurementProvider.addMeasurement(BodyMeasurement(weight: w, height: h, bodyFatPercentage: bf));
                       if (!ctx.mounted) return;
                       Navigator.of(ctx).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Pomiar zapisany pomyślnie.'), backgroundColor: Colors.green),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Błąd: $e'), backgroundColor: Colors.redAccent),
-                      );
-                    }
+                    } catch (_) {}
                   }
                 },
-                child: const Text('Zapisz pomiar'),
-              ),
-              const SizedBox(height: 24),
+                child: const Text('ZAPISZ POMIAR', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white)),
+              ), const SizedBox(height: 24),
             ],
           ),
         ),
@@ -218,66 +202,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profil i Analityka'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Wyloguj',
-            onPressed: () async {
-              await Provider.of<AuthProvider>(context, listen: false).logout();
-            },
-          )
-        ],
+        title: const Text('Profil & Analityka', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
+        actions: [IconButton(icon: const Icon(Icons.logout, color: Color(0xFFEF4444)), tooltip: 'Wyloguj', onPressed: () async { await Provider.of<AuthProvider>(context, listen: false).logout(); }), const SizedBox(width: 8)],
       ),
       body: _buildBody(context, userProvider, measurementProvider, achievementProvider),
     );
   }
 
   Widget _buildBody(BuildContext context, UserProvider uProvider, MeasurementProvider mProvider, AchievementProvider aProvider) {
-    if (uProvider.isLoading && uProvider.profile == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
+    if (uProvider.isLoading && uProvider.profile == null) return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
     final profile = uProvider.profile;
     
     return RefreshIndicator(
-      onRefresh: () async {
-        await uProvider.refreshProfile();
-        await mProvider.fetchMeasurements();
-        await aProvider.fetchAchievements();
-      },
+      color: const Color(0xFF10B981),
+      onRefresh: () async { await uProvider.refreshProfile(); await mProvider.fetchMeasurements(); await aProvider.fetchAchievements(); },
       child: ListView(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
         children: [
           if (profile != null) ...[
-            const SizedBox(height: 8),
-            CircleAvatar(
-              radius: 46,
-              backgroundColor: Colors.deepPurpleAccent,
-              child: Text(
-                profile.displayName.isNotEmpty ? profile.displayName[0].toUpperCase() : '?',
-                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: const Color(0xFF10B981), width: 2.5)),
+                child: CircleAvatar(radius: 46, backgroundColor: const Color(0xFFD1FAE5), child: Text(profile.displayName.isNotEmpty ? profile.displayName[0].toUpperCase() : '?', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: Color(0xFF065F46)))),
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              profile.displayName,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
+            Text(profile.displayName, textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
             const SizedBox(height: 16),
             Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              color: const Color(0xFF0F172A),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
+                padding: const EdgeInsets.all(20.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    const Icon(Icons.stars, color: Colors.amber, size: 36),
-                    const SizedBox(height: 4),
-                    Text('POZIOM ${profile.level}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 2.0)),
-                    const SizedBox(height: 2),
-                    Text('Punkty doświadczenia: ${profile.totalPoints}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    Column(children: [const Text('POZIOM', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)), const SizedBox(height: 2), Text('${profile.level}', style: const TextStyle(color: Color(0xFF34D399), fontSize: 24, fontWeight: FontWeight.w900))]),
+                    Container(height: 40, width: 1, color: const Color(0xFF334155)),
+                    Column(children: [const Text('PUNKTY EXP', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)), const SizedBox(height: 2), Text('${profile.totalPoints}', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900))]),
                   ],
                 ),
               ),
@@ -285,113 +247,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 24),
           ],
           
+          // KARTA WYKRESU WAGI
           Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            color: const Color(0xFF221C35),
             child: Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Row(children: [Icon(Icons.trending_down, color: Colors.amberAccent), SizedBox(width: 8), Text('Trend Masy Ciała', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))]),
-                      TextButton.icon(onPressed: () => _showAddMeasurementDialog(context), icon: const Icon(Icons.add, size: 16, color: Colors.amberAccent), label: const Text('Dodaj pomiar', style: TextStyle(color: Colors.amberAccent, fontSize: 12))),
+                      const Row(children: [Icon(Icons.monitor_weight, color: Color(0xFF10B981)), SizedBox(width: 8), Text('Masa Ciała', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)))]),
+                      TextButton.icon(onPressed: () => _showAddMeasurementDialog(context), icon: const Icon(Icons.add, size: 18, color: Color(0xFF10B981)), label: const Text('Dodaj', style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold))),
                     ],
                   ),
-                  const Divider(color: Colors.white10),
-                  if (mProvider.isLoading && mProvider.measurements.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator())) else _buildWeightChart(mProvider.measurements),
+                  const Divider(color: Color(0xFFF1F5F9), height: 16),
+                  if (mProvider.isLoading && mProvider.measurements.isEmpty) const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator(color: Color(0xFF10B981)))) else _buildWeightChart(mProvider.measurements),
                 ],
               ),
             ),
           ),
 
           const SizedBox(height: 24),
-
-          Text('Gablota Osiągnięć', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+          const Text('Gablota Osiągnięć', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF64748B))),
           const SizedBox(height: 12),
-          if (aProvider.isLoading && aProvider.allAchievements.isEmpty)
-            const Center(child: Padding(padding: EdgeInsets.all(16.0), child: CircularProgressIndicator()))
-          else if (aProvider.allAchievements.isEmpty)
-            const Text('Brak zdefiniowanych osiągnięć w systemie.')
-          else
-            ...aProvider.allAchievements.map((ach) {
-              final isUnlocked = aProvider.isUnlocked(ach.id);
-              final earnedDate = aProvider.getEarnedDate(ach.id);
+          if (aProvider.isLoading && aProvider.allAchievements.isEmpty) const Center(child: CircularProgressIndicator(color: Color(0xFF10B981))) else ...aProvider.allAchievements.map((ach) {
+            final isUnlocked = aProvider.isUnlocked(ach.id);
+            final earnedDate = aProvider.getEarnedDate(ach.id);
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8.0),
-                color: isUnlocked ? const Color(0xFF252238) : const Color(0xFF161620),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: isUnlocked ? Colors.amber.withValues(alpha: 0.5) : Colors.transparent,
-                    width: 1.0,
-                  ),
-                ),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10.0),
+              child: Card(
+                color: isUnlocked ? const Color(0xFFECFDF5) : Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isUnlocked ? const Color(0xFF6EE7B7) : const Color(0xFFE2E8F0), width: isUnlocked ? 1.5 : 1.0)),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: isUnlocked ? Colors.amber.withValues(alpha: 0.2) : Colors.white10,
-                    child: Icon(
-                      _getIcon(ach.iconUrl),
-                      color: isUnlocked ? Colors.amber : Colors.white30,
-                    ),
-                  ),
-                  title: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          ach.name,
-                          style: TextStyle(fontWeight: FontWeight.bold, color: isUnlocked ? Colors.white : Colors.white54),
-                        ),
-                      ),
-                      if (isUnlocked)
-                        const Icon(Icons.check_circle, color: Colors.greenAccent, size: 16)
-                      else
-                        const Icon(Icons.lock_outline, color: Colors.white30, size: 16),
-                    ],
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(ach.description, style: TextStyle(color: isUnlocked ? Colors.white70 : Colors.white30, fontSize: 12)),
-                      const SizedBox(height: 4),
-                      if (isUnlocked && earnedDate != null)
-                        Text(
-                          'Zdobyto: ${earnedDate.day.toString().padLeft(2, '0')}.${earnedDate.month.toString().padLeft(2, '0')}.${earnedDate.year}',
-                          style: const TextStyle(color: Colors.amberAccent, fontSize: 10, fontWeight: FontWeight.bold),
-                        )
-                      else
-                        Text('Wymagane: ${ach.requiredPoints} pkt', style: const TextStyle(color: Colors.white30, fontSize: 10)),
-                    ],
-                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                  leading: CircleAvatar(backgroundColor: isUnlocked ? const Color(0xFF10B981) : const Color(0xFFF1F5F9), child: Icon(_getIcon(ach.iconUrl), color: isUnlocked ? Colors.white : const Color(0xFF94A3B8))),
+                  title: Row(children: [Expanded(child: Text(ach.name, style: TextStyle(fontWeight: FontWeight.w900, color: isUnlocked ? const Color(0xFF065F46) : const Color(0xFF64748B)))), if (isUnlocked) const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 20)]),
+                  subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const SizedBox(height: 4), Text(ach.description, style: TextStyle(color: isUnlocked ? const Color(0xFF065F46).withValues(alpha: 0.8) : const Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w500)), if (isUnlocked && earnedDate != null) Padding(padding: const EdgeInsets.only(top: 4.0), child: Text('Zdobyto: ${earnedDate.day.toString().padLeft(2, '0')}.${earnedDate.month.toString().padLeft(2, '0')}.${earnedDate.year}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w800))) else Padding(padding: const EdgeInsets.only(top: 4.0), child: Text('Wymagane: ${ach.requiredPoints} pkt', style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11, fontWeight: FontWeight.bold)))]),
                 ),
-              );
-            }),
+              ),
+            );
+          }),
 
           const SizedBox(height: 24),
-
-          Text('Historia wpisów wagowych', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          
-          if (mProvider.measurements.isEmpty)
-            const Text('Brak zarejestrowanych pomiarów.', style: TextStyle(color: Colors.white54))
-          else
-            ...mProvider.measurements.map((m) => Card(
-              margin: const EdgeInsets.only(bottom: 6.0),
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.monitor_weight, color: Colors.deepPurpleAccent, size: 20),
-                title: Text('${m.weight} kg', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Wzrost: ${m.height} cm ${m.bodyFatPercentage != null ? '| BF: ${m.bodyFatPercentage}%' : ''}'),
-                trailing: m.measuredAt != null 
-                    ? Text('${m.measuredAt!.day.toString().padLeft(2, '0')}.${m.measuredAt!.month.toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 12))
-                    : null,
-              ),
-            )),
+          const Text('Historia wpisów wagowych', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF64748B))), const SizedBox(height: 8),
+          ...mProvider.measurements.map((m) => Card(margin: const EdgeInsets.only(bottom: 8.0), child: ListTile(dense: true, leading: const Icon(Icons.scale, color: Color(0xFF10B981)), title: Text('${m.weight} kg', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: Color(0xFF0F172A))), subtitle: Text('Wzrost: ${m.height} cm ${m.bodyFatPercentage != null ? '| BF: ${m.bodyFatPercentage}%' : ''}', style: const TextStyle(color: Color(0xFF64748B))), trailing: m.measuredAt != null ? Text('${m.measuredAt!.day.toString().padLeft(2, '0')}.${m.measuredAt!.month.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))) : null))),
         ],
       ),
     );

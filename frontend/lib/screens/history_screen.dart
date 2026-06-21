@@ -44,114 +44,57 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Historia Treningów'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Odśwież od początku',
-            onPressed: () => sessionProvider.fetchHistory(refresh: true),
-          )
-        ],
+        title: const Text('Dziennik Aktywności', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
+        actions: [IconButton(icon: const Icon(Icons.refresh, color: Color(0xFF10B981)), tooltip: 'Odśwież', onPressed: () => sessionProvider.fetchHistory(refresh: true)), const SizedBox(width: 8)],
       ),
       body: _buildBody(sessionProvider),
     );
   }
 
   Widget _buildBody(SessionProvider provider) {
-    if (provider.isLoading && provider.history.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (provider.errorMessage != null && provider.history.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.cloud_off, color: Colors.redAccent, size: 60),
-              const SizedBox(height: 16),
-              const Text('Błąd ładowania historii:', textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              Text(provider.errorMessage!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => provider.fetchHistory(refresh: true),
-                child: const Text('Spróbuj ponownie'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (provider.history.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text(
-            'Twój dziennik treningowy jest pusty. Wykonaj pierwszy trening, aby zobaczyć tutaj swoje wyniki.',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
+    if (provider.isLoading && provider.history.isEmpty) return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
+    if (provider.errorMessage != null && provider.history.isEmpty) return Center(child: Text('Błąd: ${provider.errorMessage}'));
+    if (provider.history.isEmpty) return const Center(child: Text('Brak zapisanych sesji.', style: TextStyle(color: Color(0xFF94A3B8))));
 
     return RefreshIndicator(
+      color: const Color(0xFF10B981),
       onRefresh: () => provider.fetchHistory(refresh: true),
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
         itemCount: provider.history.length + (provider.isFetchingMore ? 1 : 0),
         itemBuilder: (context, index) {
-          if (index == provider.history.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
-            );
-          }
+          if (index == provider.history.length) return const Padding(padding: EdgeInsets.symmetric(vertical: 16.0), child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Color(0xFF10B981), strokeWidth: 2))));
 
           final session = provider.history[index];
-          return Card(
-            elevation: 2,
-            margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ExpansionTile(
-              leading: CircleAvatar(
-                // Zastosowanie nowej metody zgodnie z wytycznymi Fluttera
-                backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.2),
-                child: const Icon(Icons.timeline, color: Colors.deepPurpleAccent),
-              ),
-              title: Text(
-                _formatDate(session.startTime),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              subtitle: Text('Objętość: ${session.totalVolume.toStringAsFixed(1)} kg | Punkty: +${session.earnedPoints}', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text('Zarejestrowane serie w tej sesji:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
-                      const SizedBox(height: 8),
-                      ...session.sets.map((s) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 2.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Ćwiczenie ID ${s.exerciseId} (Seria ${s.setNumber})', style: const TextStyle(fontSize: 13)),
-                            Text('${s.reps}x ${s.weight} kg', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
-                        ),
-                      )),
-                      const Divider(),
-                      if (session.endTime != null)
-                        Text('Czas trwania sesji: ${session.endTime!.difference(session.startTime).inMinutes} min', style: const TextStyle(fontSize: 12, color: Colors.white54)),
-                    ],
-                  ),
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10.0),
+            child: Card(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: ExpansionTile(
+                  // POPRAWKA: Przekazanie instancji ShapeBorder usuwającej linie podziału
+                  shape: const RoundedRectangleBorder(), 
+                  collapsedShape: const RoundedRectangleBorder(),
+                  leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF0EA5E9).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)), child: const Icon(Icons.fitness_center, color: Color(0xFF0EA5E9), size: 20)),
+                  title: Text(_formatDate(session.startTime), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Color(0xFF0F172A))),
+                  subtitle: Text('Objętość: ${session.totalVolume.toStringAsFixed(0)} kg | Punkty: +${session.earnedPoints}', style: const TextStyle(color: Color(0xFF10B981), fontSize: 12, fontWeight: FontWeight.w700)),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(18.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('ZAREJESTROWANE SERIE:', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF64748B), fontSize: 11)), const SizedBox(height: 8),
+                          ...session.sets.map((s) => Padding(padding: const EdgeInsets.symmetric(vertical: 3.0), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('Ćwiczenie ID ${s.exerciseId} (Seria ${s.setNumber})', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF334155))), Text('${s.reps}x ${s.weight} kg', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Color(0xFF0F172A)))]))),
+                          const Divider(color: Color(0xFFF1F5F9), height: 20),
+                          if (session.endTime != null) Text('Czas trwania sesji: ${session.endTime!.difference(session.startTime).inMinutes} min', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         },
