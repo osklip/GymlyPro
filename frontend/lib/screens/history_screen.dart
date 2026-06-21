@@ -10,12 +10,27 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  final ScrollController _scrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<SessionProvider>(context, listen: false).fetchHistory();
     });
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      Provider.of<SessionProvider>(context, listen: false).fetchMoreHistory();
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   String _formatDate(DateTime date) {
@@ -33,8 +48,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Odśwież historię',
-            onPressed: () => sessionProvider.fetchHistory(),
+            tooltip: 'Odśwież od początku',
+            onPressed: () => sessionProvider.fetchHistory(refresh: true),
           )
         ],
       ),
@@ -59,6 +74,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
               const Text('Błąd ładowania historii:', textAlign: TextAlign.center),
               const SizedBox(height: 8),
               Text(provider.errorMessage!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => provider.fetchHistory(refresh: true),
+                child: const Text('Spróbuj ponownie'),
+              ),
             ],
           ),
         ),
@@ -77,42 +97,65 @@ class _HistoryScreenState extends State<HistoryScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(8.0),
-      itemCount: provider.history.length,
-      itemBuilder: (context, index) {
-        final session = provider.history[index];
-        return Card(
-          elevation: 2,
-          margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-          child: ExpansionTile(
-            leading: const CircleAvatar(
-              backgroundColor: Colors.deepPurple,
-              child: Icon(Icons.timeline, color: Colors.white),
-            ),
-            title: Text(
-              _formatDate(session.startTime),
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text('Objętość: ${session.totalVolume} kg | Punkty: +${session.earnedPoints}'),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text('Szczegóły sesji:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    Text('Ilość zarejestrowanych serii: ${session.sets.length}'),
-                    if (session.endTime != null)
-                      Text('Czas trwania: ${session.endTime!.difference(session.startTime).inMinutes} min'),
-                  ],
-                ),
+    return RefreshIndicator(
+      onRefresh: () => provider.fetchHistory(refresh: true),
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(8.0),
+        // Zwiększamy licznik o 1, jeśli w toku jest dociąganie kolejnej strony
+        itemCount: provider.history.length + (provider.isFetchingMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == provider.history.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+            );
+          }
+
+          final session = provider.history[index];
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ExpansionTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.deepPurpleAccent.withOpacity(0.2),
+                child: const Icon(Icons.timeline, color: Colors.deepPurpleAccent),
               ),
-            ],
-          ),
-        );
-      },
+              title: Text(
+                _formatDate(session.startTime),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              subtitle: Text('Objętość: ${session.totalVolume.toStringAsFixed(1)} kg | Punkty: +${session.earnedPoints}', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text('Zarejestrowane serie w tej sesji:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+                      const SizedBox(height: 8),
+                      ...session.sets.map((s) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('Ćwiczenie ID ${s.exerciseId} (Seria ${s.setNumber})', style: const TextStyle(fontSize: 13)),
+                            Text('${s.reps}x ${s.weight} kg', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      )),
+                      const Divider(),
+                      if (session.endTime != null)
+                        Text('Czas trwania sesji: ${session.endTime!.difference(session.startTime).inMinutes} min', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

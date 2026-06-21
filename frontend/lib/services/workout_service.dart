@@ -11,9 +11,8 @@ class WorkoutService {
   Future<String> _getToken() async {
     final user = _auth.currentUser;
     if (user == null) {
-      throw Exception('Brak autoryzacji. Użytkownik nie jest zalogowany.');
+      throw Exception('Brak autoryzacji. Zaloguj się ponownie.');
     }
-    // Wymuszenie odświeżenia tokenu zapobiega problemom z synchronizacją czasu
     final token = await user.getIdToken(true);
     if (token == null) {
       throw Exception('Nie udało się wygenerować tokenu dostępu.');
@@ -39,7 +38,7 @@ class WorkoutService {
         throw Exception('Błąd serwera HTTP: ${response.statusCode}');
       }
     } on SocketException {
-      throw Exception('Brak połączenia z serwerem. Upewnij się, że backend jest uruchomiony na hoście (Windows 11).');
+      throw Exception('Brak połączenia z serwerem. Upewnij się, że backend działa w systemie Windows 11.');
     } catch (e) {
       throw Exception('Nieoczekiwany błąd: $e');
     }
@@ -66,6 +65,40 @@ class WorkoutService {
       throw Exception('Brak połączenia sieciowego z serwerem.');
     } catch (e) {
       throw Exception('Nieoczekiwany błąd: $e');
+    }
+  }
+
+  Future<void> deletePlan(int planId) async {
+    try {
+      final token = await _getToken();
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/plans/$planId'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode != 204) {
+        throw Exception('Nie udało się usunąć planu (Kod: ${response.statusCode}).');
+      }
+    } on SocketException {
+      throw Exception('Brak połączenia sieciowego.');
+    }
+  }
+
+  Future<WorkoutPlan> togglePlanStatus(int planId) async {
+    try {
+      final token = await _getToken();
+      final response = await http.patch(
+        Uri.parse('$_baseUrl/plans/$planId/toggle'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (response.statusCode == 200) {
+        return WorkoutPlan.fromJson(json.decode(utf8.decode(response.bodyBytes)));
+      } else {
+        throw Exception('Nie udało się zmienić statusu planu (Kod: ${response.statusCode}).');
+      }
+    } on SocketException {
+      throw Exception('Brak połączenia sieciowego.');
     }
   }
 }

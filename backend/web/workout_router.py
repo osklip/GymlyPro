@@ -33,3 +33,40 @@ def create_plan(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Brak UID")
     
     return workout_service.create_workout_plan(db, plan, user_id=uid)
+
+@router.delete("/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    firebase_user: dict = Depends(verify_firebase_token)
+):
+    """Usuwa wskazany plan treningowy."""
+    uid = firebase_user.get("uid")
+    if not uid or not isinstance(uid, str):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Brak UID")
+    
+    success = workout_service.delete_workout_plan(db, plan_id=plan_id, user_id=uid)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Plan nie istnieje lub nie masz uprawnień do jego usunięcia."
+        )
+
+@router.patch("/{plan_id}/toggle", response_model=schemas.WorkoutPlan)
+def toggle_plan_status(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    firebase_user: dict = Depends(verify_firebase_token)
+):
+    """Zmienia stan aktywności planu (aktywny / nieaktywny)."""
+    uid = firebase_user.get("uid")
+    if not uid or not isinstance(uid, str):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Brak UID")
+    
+    plan = workout_service.toggle_plan_active(db, plan_id=plan_id, user_id=uid)
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Plan nie istnieje lub brak uprawnień."
+        )
+    return plan

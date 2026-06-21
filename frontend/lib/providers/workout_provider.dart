@@ -35,13 +35,38 @@ class WorkoutProvider extends ChangeNotifier {
 
     try {
       final createdPlan = await _workoutService.createPlan(newPlan);
-      _plans.add(createdPlan);
+      _plans.insert(0, createdPlan); // Wstawienie na początek listy
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> removePlan(int planId) async {
+    try {
+      await _workoutService.deletePlan(planId);
+      _plans.removeWhere((p) => p.id == planId);
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Błąd usuwania planu: $e");
+      rethrow;
+    }
+  }
+
+  Future<void> toggleActiveStatus(int planId) async {
+    try {
+      final updatedPlan = await _workoutService.togglePlanStatus(planId);
+      final index = _plans.indexWhere((p) => p.id == planId);
+      if (index != -1) {
+        _plans[index] = updatedPlan;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Błąd przełączania statusu: $e");
+      rethrow;
     }
   }
 }

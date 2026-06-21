@@ -3,6 +3,22 @@ from datetime import datetime
 from data.models import WorkoutSession, WorkoutSet, User, PointHistory
 from model.schemas import WorkoutSessionCreate, WorkoutSetCreate
 
+def _extract_int(val: object, default: int = 0) -> int:
+    try:
+        if val is None:
+            return default
+        return int(val)  # type: ignore
+    except Exception:
+        return default
+
+def _extract_float(val: object, default: float = 0.0) -> float:
+    try:
+        if val is None:
+            return default
+        return float(val)  # type: ignore
+    except Exception:
+        return default
+
 def start_session(db: Session, user_id: str, session_data: WorkoutSessionCreate):
     """Rozpoczyna nowy trening, zapisując czas startu"""
     db_session = WorkoutSession(
@@ -33,49 +49,71 @@ def add_set_to_session(db: Session, session_id: int, set_data: WorkoutSetCreate)
     db.refresh(db_set)
     return db_set
 
+def delete_set_from_session(db: Session, session_id: int, set_id: int, user_id: str) -> bool:
+    """Usuwa pojedynczą serię z sesji treningowej po weryfikacji właściciela."""
+    session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id, WorkoutSession.user_id == user_id).first()
+    if not session:
+        return False
+        
+    db_set = db.query(WorkoutSet).filter(WorkoutSet.id == set_id, WorkoutSet.session_id == session_id).first()
+    if not db_set:
+        return False
+        
+    db.delete(db_set)
+    db.commit()
+    return True
+
 def finish_session(db: Session, session_id: int, user_id: str):
-    """Zamyka trening, oblicza objętość i dodaje PUNKTY GRYWALIZACJI"""
-    db_session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id).first()
+    """Zamyka trening, oblicza objętość i dodaje punkty oraz weryfikuje poziom (Level Up)"""
+    db_session = db.query(WorkoutSession).filter(WorkoutSession.id == session_id, WorkoutSession.user_id == user_id).first()
     if not db_session or db_session.end_time is not None:
-        return None # Sesja nie istnieje lub jest już zamknięta
+        return None
 
-    # 1. Zakończ czas
-    db_session.end_time = datetime.utcnow() # type: ignore
+    setattr(db_session, "end_time", datetime.utcnow())
 
-    # 2. Oblicz całkowitą objętość (Total Volume = reps * weight) z zapisanych serii
     sets = db.query(WorkoutSet).filter(WorkoutSet.session_id == session_id).all()
     
     total_volume = 0.0
     for s in sets:
-        # Używamy operatora 'is', aby nie wyzwalać logiki zapytań SQLAlchemy.
-        # Sprawdzamy dokładnie, czy w bazie jest zapisane 'False' dla rozgrzewki i 'True' dla sukcesu.
-        if s.is_warmup is False and s.is_successful is True:
-            reps = int(s.reps) # type: ignore
-            weight = float(s.weight) # type: ignore
+        # Pomijamy serie rozgrzewkowe oraz nieudane
+        if getattr(s, "is_warmup", False) is False and getattr(s, "is_successful", True) is True:
+            reps = _extract_int(getattr(s, "reps", 0))
+            weight = _extract_float(getattr(s, "weight", 0.0))
             total_volume += reps * weight
 
-    db_session.total_volume = total_volume # type: ignore
+    setattr(db_session, "total_volume", total_volume)
 
-    # 3. SILNIK GRYWALIZACJI - Przydział punktów
-    earned_points = 50 + int(total_volume / 100)
-    db_session.earned_points = earned_points # type: ignore
+    earned_points = 50 + int(total_volume // 100)
+    setattr(db_session, "earned_points", earned_points)
 
-    # Zaktualizuj portfel punktów użytkownika i dodaj wpis do historii audytowej
     user = db.query(User).filter(User.id == user_id).first()
     if user:
-        current_points = int(user.total_points) # type: ignore
+        current_points = _extract_int(getattr(user, "total_points", 0))
         new_points = current_points + earned_points
-        
-        user.total_points = new_points # type: ignore
-        user.level = (new_points // 1000) + 1 # type: ignore
+        setattr(user, "total_points", new_points)
+
+        # Wyznaczenie poziomu: próg awansu to 1000 punktów na każdy poziom
+        new_level = (new_points // 1000) + 1
+        setattr(user, "level", new_level)
 
         point_history = PointHistory(
             user_id=user_id,
             points=earned_points,
-            reason=f"Zakończenie treningu (Objętość: {total_volume} kg)"
+            reason=f"Zakończenie treningu (Objętość: {total_volume:.1f} kg)"
         )
         db.add(point_history)
 
     db.commit()
     db.refresh(db_session)
     return db_session
+
+def get_user_sessions_history(db: Session, user_id: str, skip: int = 0, limit: int = 20):
+    """Pobiera historię sesji treningowych z uwzględnieniem paginacji (limit i offset)."""
+    return (
+        db.query(WorkoutSession)
+        .filter(WorkoutSession.user_id == user_id, WorkoutSession.end_time != None)
+        .order_by(WorkoutSession.start_time.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )

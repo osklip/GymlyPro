@@ -4,11 +4,10 @@ from model.schemas import WorkoutPlanCreate
 
 def get_user_plans(db: Session, user_id: str):
     """Pobiera wszystkie plany należące do konkretnego użytkownika"""
-    return db.query(WorkoutPlan).filter(WorkoutPlan.user_id == user_id).all()
+    return db.query(WorkoutPlan).filter(WorkoutPlan.user_id == user_id).order_by(WorkoutPlan.created_at.desc()).all()
 
 def create_workout_plan(db: Session, plan: WorkoutPlanCreate, user_id: str):
     """Tworzy nowy plan treningowy wraz z ćwiczeniami"""
-    # 1. Tworzymy główny obiekt planu i zapisujemy, by uzyskać jego ID
     db_plan = WorkoutPlan(
         user_id=user_id,
         name=plan.name,
@@ -18,7 +17,6 @@ def create_workout_plan(db: Session, plan: WorkoutPlanCreate, user_id: str):
     db.commit()
     db.refresh(db_plan)
 
-    # 2. Iterujemy przez przesłane ćwiczenia i przypisujemy je do planu
     for exercise in plan.exercises:
         db_plan_exercise = PlanExercise(
             plan_id=db_plan.id,
@@ -30,9 +28,31 @@ def create_workout_plan(db: Session, plan: WorkoutPlanCreate, user_id: str):
         )
         db.add(db_plan_exercise)
     
-    # 3. Zapisujemy wszystkie przypisane ćwiczenia w bazie
     if plan.exercises:
         db.commit()
         db.refresh(db_plan)
         
     return db_plan
+
+def delete_workout_plan(db: Session, plan_id: int, user_id: str) -> bool:
+    """Usuwa plan treningowy, upewniając się, że należy do autoryzowanego użytkownika."""
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == user_id).first()
+    if not plan:
+        return False
+    db.delete(plan)
+    db.commit()
+    return True
+
+def toggle_plan_active(db: Session, plan_id: int, user_id: str):
+    """Przełącza stan aktywności planu (is_active)."""
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id, WorkoutPlan.user_id == user_id).first()
+    if not plan:
+        return None
+    
+    # Obejście statycznej analizy typów Pylance (Column[bool] vs bool)
+    current_status = bool(getattr(plan, "is_active", False))
+    setattr(plan, "is_active", not current_status)
+    
+    db.commit()
+    db.refresh(plan)
+    return plan
