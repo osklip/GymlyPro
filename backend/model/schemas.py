@@ -152,3 +152,16 @@ class UserAchievement(UserAchievementBase):
 
     class Config:
         from_attributes = True
+
+class LeaderboardEntry(BaseModel):
+    id: str
+    display_name: str
+    level: int
+    stat_value: float
+    stat_label: str
+
+# === NOWE: SCHEMAT AKTUALIZACJI PLANU ===
+class WorkoutPlanUpdate(BaseModel):
+    name: str
+    is_active: bool
+    exercises: List[PlanExerciseCreate] = []

@@ -5,6 +5,7 @@ import '../providers/exercise_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/workout_provider.dart';
 import 'active_workout_screen.dart';
+import 'edit_plan_screen.dart'; // Kluczowy import
 
 class PlanDetailsScreen extends StatefulWidget {
   final WorkoutPlan plan;
@@ -41,13 +42,21 @@ class _PlanDetailsScreenState extends State<PlanDetailsScreen> {
   Widget build(BuildContext context) {
     final exerciseProvider = Provider.of<ExerciseProvider>(context);
     final workoutProvider = Provider.of<WorkoutProvider>(context);
-    // POPRAWKA: Zmiana "orelse" na poprawne "orElse"
     final currentPlan = workoutProvider.plans.firstWhere((p) => p.id == widget.plan.id, orElse: () => widget.plan);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(currentPlan.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
         actions: [
+          // NOWE: Przycisk wywołujący edycję planu
+          IconButton(
+            icon: const Icon(Icons.edit, size: 26), 
+            color: const Color(0xFF0EA5E9),
+            tooltip: 'Edytuj ten szablon',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => EditPlanScreen(plan: currentPlan)));
+            },
+          ),
           IconButton(
             icon: Icon(currentPlan.isActive ? Icons.star : Icons.star_border, size: 28), color: const Color(0xFF10B981),
             tooltip: currentPlan.isActive ? 'Dezaktywuj plan' : 'Ustaw jako aktywny',

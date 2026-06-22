@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,45 +35,87 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  // NOWE: Okno dialogowe resetowania hasła
+  void _showForgotPasswordModal() {
+    final emailCtrl = TextEditingController(text: _emailController.text);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Odzyskiwanie hasła',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+                'Podaj adres email przypisany do konta. Wyślemy na niego bezpieczny link do zresetowania hasła.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'Adres email',
+                  prefixIcon: Icon(Icons.email_outlined)),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Anuluj',
+                  style: TextStyle(color: Color(0xFF64748B)))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981)),
+            onPressed: () async {
+              final mail = emailCtrl.text.trim();
+              if (mail.isEmpty || !mail.contains('@')) return;
+              Navigator.of(ctx).pop();
+              try {
+                await AuthService().resetPassword(mail);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text('Link resetujący został wysłany na email.'),
+                    backgroundColor: Color(0xFF10B981)));
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('Błąd: $e'),
+                    backgroundColor: Colors.redAccent));
+              }
+            },
+            child: const Text('Wyślij link',
+                style: TextStyle(color: Colors.white)),
+          )
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitForm() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
       if (_isLoginMode) {
         await authProvider.login(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-        );
+            _emailController.text.trim(), _passwordController.text.trim());
       } else {
-        await authProvider.register(
-          _emailController.text.trim(),
-          _passwordController.text.trim(),
-          _nameController.text.trim(),
-        );
+        await authProvider.register(_emailController.text.trim(),
+            _passwordController.text.trim(), _nameController.text.trim());
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Błąd: ${error.toString()}', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-          backgroundColor: const Color(0xFFEF4444),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Błąd: ${error.toString()}',
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, color: Colors.white)),
+          backgroundColor: const Color(0xFFEF4444)));
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -92,98 +135,134 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.fitness_center,
-                    size: 72,
-                    color: Color(0xFF10B981),
-                  ),
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      shape: BoxShape.circle),
+                  child: const Icon(Icons.fitness_center,
+                      size: 72, color: Color(0xFF10B981)),
                 ),
                 const SizedBox(height: 24),
-                Text(
-                  _isLoginMode ? 'Witaj w GymlyPro' : 'Dołącz do nas!',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF0F172A),
-                    letterSpacing: -0.5,
-                  ),
-                ),
+                Text(_isLoginMode ? 'Witaj w GymlyPro' : 'Dołącz do elity',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFF0F172A),
+                        letterSpacing: -0.5)),
                 const SizedBox(height: 8),
                 Text(
-                  _isLoginMode ? 'Zaloguj się, by trenować z nami' : 'Stwórz konto i śledź swoje rekordy',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 14, fontWeight: FontWeight.w500),
-                ),
+                    _isLoginMode
+                        ? 'Zaloguj się, by kontynuować trening'
+                        : 'Stwórz konto i śledź swoje rekordy',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(height: 32),
                 if (!_isLoginMode)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: TextFormField(
                       controller: _nameController,
-                      style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                          color: Color(0xFF0F172A),
+                          fontWeight: FontWeight.w600),
                       decoration: const InputDecoration(
-                        labelText: 'Nazwa użytkownika',
-                        prefixIcon: Icon(Icons.person_outline, color: Color(0xFF64748B)),
-                      ),
-                      validator: (value) => (value == null || value.trim().length < 3) ? 'Minimum 3 znaki' : null,
+                          labelText: 'Nazwa użytkownika',
+                          prefixIcon:
+                              Icon(Icons.person_outline, color: Color(0xFF64748B))),
+                      validator: (value) =>
+                          (value == null || value.trim().length < 3)
+                              ? 'Minimum 3 znaki'
+                              : null,
                     ),
                   ),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                   decoration: const InputDecoration(
-                    labelText: 'Adres email',
-                    prefixIcon: Icon(Icons.email_outlined, color: Color(0xFF64748B)),
-                  ),
-                  validator: (value) => (value == null || !value.contains('@')) ? 'Podaj poprawny email' : null,
+                      labelText: 'Adres email',
+                      prefixIcon:
+                          Icon(Icons.email_outlined, color: Color(0xFF64748B))),
+                  validator: (value) => (value == null || !value.contains('@'))
+                      ? 'Podaj poprawny email'
+                      : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _isPasswordObscured,
-                  style: const TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      color: Color(0xFF0F172A), fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     labelText: 'Hasło',
-                    prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
+                    prefixIcon:
+                        const Icon(Icons.lock_outline, color: Color(0xFF64748B)),
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordObscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                        color: const Color(0xFF64748B),
-                      ),
-                      onPressed: () => setState(() => _isPasswordObscured = !_isPasswordObscured),
+                          _isPasswordObscured
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: const Color(0xFF64748B)),
+                      onPressed: () => setState(
+                          () => _isPasswordObscured = !_isPasswordObscured),
                     ),
                   ),
-                  validator: (value) => (value == null || value.length < 6) ? 'Minimum 6 znaków' : null,
+                  validator: (value) => (value == null || value.length < 6)
+                      ? 'Minimum 6 znaków'
+                      : null,
                 ),
-                const SizedBox(height: 32),
+                if (_isLoginMode)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _showForgotPasswordModal,
+                      child: const Text('Zapomniałem hasła',
+                          style: TextStyle(
+                              color: Color(0xFF10B981),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _submitForm,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B981),
                     padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                     shadowColor: const Color(0xFF10B981).withValues(alpha: 0.3),
                     elevation: 8,
                   ),
                   child: _isLoading
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(color: Colors.white))
                       : Text(
                           _isLoginMode ? 'ZALOGUJ SIĘ' : 'ZAREJESTRUJ SIĘ',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.0),
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                              letterSpacing: 1.0),
                         ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 TextButton(
                   onPressed: _isLoading ? null : _switchMode,
                   child: Text(
-                    _isLoginMode ? 'Nie masz konta? Zarejestruj się' : 'Masz już konto? Zaloguj się',
-                    style: const TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
+                      _isLoginMode
+                          ? 'Nie masz konta? Zarejestruj się'
+                          : 'Masz już konto? Zaloguj się',
+                      style: const TextStyle(
+                          color: Color(0xFF0EA5E9),
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14)),
                 ),
               ],
             ),

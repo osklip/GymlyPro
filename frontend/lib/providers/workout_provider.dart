@@ -4,7 +4,7 @@ import '../services/workout_service.dart';
 
 class WorkoutProvider extends ChangeNotifier {
   final WorkoutService _workoutService = WorkoutService();
-  
+
   List<WorkoutPlan> _plans = [];
   bool _isLoading = false;
   String? _errorMessage;
@@ -14,12 +14,9 @@ class WorkoutProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<void> fetchPlans() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+    _isLoading = true; _errorMessage = null; notifyListeners();
     try {
-      _plans = await _workoutService.getMyPlans();
+      _plans = await _workoutService.getPlans();
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -28,14 +25,11 @@ class WorkoutProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> addPlan(WorkoutPlan newPlan) async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
+  Future<void> addPlan(WorkoutPlan plan) async {
+    _isLoading = true; _errorMessage = null; notifyListeners();
     try {
-      final createdPlan = await _workoutService.createPlan(newPlan);
-      _plans.insert(0, createdPlan); // Wstawienie na początek listy
+      final created = await _workoutService.createPlan(plan);
+      _plans.insert(0, created);
     } catch (e) {
       _errorMessage = e.toString();
       rethrow;
@@ -51,22 +45,40 @@ class WorkoutProvider extends ChangeNotifier {
       _plans.removeWhere((p) => p.id == planId);
       notifyListeners();
     } catch (e) {
-      debugPrint("Błąd usuwania planu: $e");
+      _errorMessage = e.toString();
       rethrow;
     }
   }
 
   Future<void> toggleActiveStatus(int planId) async {
     try {
-      final updatedPlan = await _workoutService.togglePlanStatus(planId);
-      final index = _plans.indexWhere((p) => p.id == planId);
-      if (index != -1) {
-        _plans[index] = updatedPlan;
+      final updated = await _workoutService.toggleActive(planId);
+      final idx = _plans.indexWhere((p) => p.id == planId);
+      if (idx != -1) {
+        _plans[idx] = updated;
         notifyListeners();
       }
     } catch (e) {
-      debugPrint("Błąd przełączania statusu: $e");
+      _errorMessage = e.toString();
       rethrow;
+    }
+  }
+
+  // NOWE: Aktualizacja obiektu planu w lokalnej pamięci RAM
+  Future<void> updatePlan(WorkoutPlan plan) async {
+    _isLoading = true; _errorMessage = null; notifyListeners();
+    try {
+      final updated = await _workoutService.updatePlan(plan);
+      final idx = _plans.indexWhere((p) => p.id == updated.id);
+      if (idx != -1) {
+        _plans[idx] = updated;
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 }
