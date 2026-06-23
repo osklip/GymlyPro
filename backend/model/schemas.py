@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 
-# === SCHEMATY ĆWICZEŃ ===
 class ExerciseBase(BaseModel):
     name: str
     target_muscle_group: str
@@ -14,11 +13,9 @@ class ExerciseCreate(ExerciseBase):
 
 class Exercise(ExerciseBase):
     id: int
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY UŻYTKOWNIKA ===
 class UserBase(BaseModel):
     display_name: str
 
@@ -30,11 +27,9 @@ class User(UserBase):
     total_points: int
     level: int
     created_at: datetime
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY ĆWICZEŃ W PLANIE ===
 class PlanExerciseBase(BaseModel):
     exercise_id: int
     order: int
@@ -48,11 +43,9 @@ class PlanExerciseCreate(PlanExerciseBase):
 class PlanExercise(PlanExerciseBase):
     id: int
     plan_id: int
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY PLANÓW TRENINGOWYCH ===
 class WorkoutPlanBase(BaseModel):
     name: str
     is_active: bool = False
@@ -65,11 +58,9 @@ class WorkoutPlan(WorkoutPlanBase):
     user_id: str
     created_at: datetime
     exercises: List[PlanExercise] = [] 
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY SERII TRENINGOWYCH ===
 class WorkoutSetBase(BaseModel):
     exercise_id: int
     set_number: int
@@ -86,11 +77,9 @@ class WorkoutSetCreate(WorkoutSetBase):
 class WorkoutSet(WorkoutSetBase):
     id: int
     session_id: int
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY SESJI TRENINGOWYCH ===
 class WorkoutSessionCreate(BaseModel):
     plan_id: Optional[int] = None 
 
@@ -103,17 +92,14 @@ class WorkoutSession(BaseModel):
     total_volume: float
     earned_points: int
     sets: List[WorkoutSet] = []
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY MODUŁU AI ===
 class AiRecommendation(BaseModel):
     exercise_id: int
     suggested_weight: Optional[float]
     message: str
 
-# === SCHEMATY POMIARÓW CIAŁA ===
 class BodyMeasurementBase(BaseModel):
     weight: float
     height: float
@@ -126,11 +112,9 @@ class BodyMeasurement(BodyMeasurementBase):
     id: int
     user_id: str
     measured_at: datetime
-
     class Config:
         from_attributes = True
 
-# === SCHEMATY OSIĄGNIĘĆ ===
 class AchievementBase(BaseModel):
     name: str
     description: str
@@ -139,7 +123,6 @@ class AchievementBase(BaseModel):
 
 class Achievement(AchievementBase):
     id: int
-
     class Config:
         from_attributes = True
 
@@ -149,7 +132,6 @@ class UserAchievementBase(BaseModel):
 
 class UserAchievement(UserAchievementBase):
     earned_at: datetime
-
     class Config:
         from_attributes = True
 
@@ -160,8 +142,18 @@ class LeaderboardEntry(BaseModel):
     stat_value: float
     stat_label: str
 
-# === NOWE: SCHEMAT AKTUALIZACJI PLANU ===
 class WorkoutPlanUpdate(BaseModel):
     name: str
     is_active: bool
     exercises: List[PlanExerciseCreate] = []
+
+# === NOWE SCHEMATY AI ===
+class AiSubstitute(BaseModel):
+    original_exercise_id: int
+    substitute_exercise_ids: List[int]
+    reasoning: str
+
+class AiGuidance(BaseModel):
+    exercise_id: int
+    tips: List[str]
+    focus_areas: List[str]

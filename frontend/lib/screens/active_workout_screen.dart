@@ -31,7 +31,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
   int _restSecondsRemaining = 0;
   bool _isFinishing = false;
 
-  // POPRAWKA: Dodanie modyfikatora 'static'
   static const String _draftKey = 'gymlypro_workout_draft';
   Timer? _debounceTimer;
 
@@ -39,16 +38,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       Provider.of<ExerciseProvider>(context, listen: false).fetchExercises();
-      
       if (widget.plan != null) {
         for (var planEx in widget.plan!.exercises) {
           _initControllersForExercise(planEx.exerciseId, defaultReps: planEx.targetReps, defaultWeight: planEx.targetWeight);
         }
       }
-
       await _restoreDraftFromDisk();
     });
   }
@@ -62,13 +58,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
 
   void _initControllersForExercise(int exId, {int? defaultReps, double? defaultWeight}) {
     if (!_activeExerciseIds.contains(exId)) _activeExerciseIds.add(exId);
-    
     if (!_repsControllers.containsKey(exId)) {
       final ctrl = TextEditingController(text: defaultReps != null ? defaultReps.toString() : '10');
       ctrl.addListener(_debouncedSaveDraft);
       _repsControllers[exId] = ctrl;
     }
-
     if (!_weightControllers.containsKey(exId)) {
       final ctrl = TextEditingController(text: defaultWeight != null ? defaultWeight.toString() : '');
       ctrl.addListener(_debouncedSaveDraft);
@@ -89,18 +83,11 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
       final rpesMap = _rpeSelectedCache.map((k, v) => MapEntry(k.toString(), v));
 
       final draftData = {
-        'active_ids': _activeExerciseIds,
-        'reps': repsMap,
-        'weights': weightsMap,
-        'rpes': rpesMap,
-        'timer_sec': _restSecondsRemaining,
-        'timer_timestamp': _restSecondsRemaining > 0 ? DateTime.now().millisecondsSinceEpoch : null,
+        'active_ids': _activeExerciseIds, 'reps': repsMap, 'weights': weightsMap, 'rpes': rpesMap,
+        'timer_sec': _restSecondsRemaining, 'timer_timestamp': _restSecondsRemaining > 0 ? DateTime.now().millisecondsSinceEpoch : null,
       };
-
       await prefs.setString(_draftKey, json.encode(draftData));
-    } catch (e) {
-      debugPrint('Błąd zrzutu stanu do cache: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _restoreDraftFromDisk() async {
@@ -108,7 +95,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
       final prefs = await SharedPreferences.getInstance();
       final jsonStr = prefs.getString(_draftKey);
       if (jsonStr == null) return;
-
       final data = json.decode(jsonStr) as Map<String, dynamic>;
 
       final savedIds = (data['active_ids'] as List<dynamic>?)?.map((e) => e as int).toList() ?? [];
@@ -129,21 +115,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
 
       final targetSec = data['timer_sec'] as int? ?? 0;
       final startMs = data['timer_timestamp'] as int?;
-
       if (targetSec > 0 && startMs != null) {
-        final nowMs = DateTime.now().millisecondsSinceEpoch;
-        final diffSec = ((nowMs - startMs) / 1000).floor();
+        final diffSec = ((DateTime.now().millisecondsSinceEpoch - startMs) / 1000).floor();
         final realSecRemaining = targetSec - diffSec;
-
-        if (realSecRemaining > 0) {
-          _startRestTimer(seconds: realSecRemaining);
-        }
+        if (realSecRemaining > 0) _startRestTimer(seconds: realSecRemaining);
       }
-
       setState(() {});
-    } catch (e) {
-      debugPrint('Błąd odczytu draftu: $e');
-    }
+    } catch (_) {}
   }
 
   void _startRestTimer({int seconds = 90}) {
@@ -180,15 +158,53 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
   Future<void> _applyAiSuggestion(int exerciseId) async {
     final aiProvider = Provider.of<AiProvider>(context, listen: false);
     try {
-      final recommendation = await aiProvider.fetchRecommendation(exerciseId);
+      final rec = await aiProvider.fetchRecommendation(exerciseId);
       if (!mounted) return;
-
-      if (recommendation.suggestedWeight != null) {
-        _weightControllers[exerciseId]?.text = recommendation.suggestedWeight.toString();
-        _aiSuggestedWeightsCache[exerciseId] = recommendation.suggestedWeight;
+      if (rec.suggestedWeight != null) {
+        _weightControllers[exerciseId]?.text = rec.suggestedWeight.toString();
+        _aiSuggestedWeightsCache[exerciseId] = rec.suggestedWeight;
         _saveDraftToDisk();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI: ${recommendation.message}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF0EA5E9), duration: const Duration(seconds: 3)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('AI: ${rec.message}', style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF0EA5E9), duration: const Duration(seconds: 3)));
       }
+    } catch (_) {}
+  }
+
+  Future<void> _showAiGuidanceModal(int exerciseId) async {
+    final aiProvider = Provider.of<AiProvider>(context, listen: false);
+    try {
+      final guidance = await aiProvider.fetchGuidance(exerciseId);
+      if (!mounted) return;
+      
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.lightbulb, color: Color(0xFFF59E0B), size: 28), SizedBox(width: 12),
+                  Text('Porady AI Trenera', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                ],
+              ),
+              const Divider(height: 32, color: Color(0xFFE2E8F0)),
+              const Text('KLUCZOWE WSKAZÓWKI:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF64748B))),
+              const SizedBox(height: 8),
+              ...guidance.tips.map((t) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('• ', style: TextStyle(color: Color(0xFFF59E0B), fontWeight: FontWeight.bold, fontSize: 16)), Expanded(child: Text(t, style: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w600)))]))),
+              const SizedBox(height: 16),
+              const Text('PUNKTY SKUPIENIA BŁĘDÓW:', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Color(0xFF64748B))),
+              const SizedBox(height: 8),
+              ...guidance.focusAreas.map((f) => Padding(padding: const EdgeInsets.only(bottom: 6), child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFEF4444)), const SizedBox(width: 6), Expanded(child: Text(f, style: const TextStyle(color: Color(0xFF334155), fontWeight: FontWeight.w600)))]))),
+              const SizedBox(height: 24),
+              ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0F172A), padding: const EdgeInsets.symmetric(vertical: 16)), onPressed: () => Navigator.of(ctx).pop(), child: const Text('ZROZUMIANO', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white))),
+            ],
+          ),
+        ),
+      );
     } catch (_) {}
   }
 
@@ -202,7 +218,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
     final reps = int.tryParse(repsText) ?? 0;
     final weight = double.tryParse(weightText) ?? 0.0;
     final rpe = _rpeSelectedCache[exerciseId];
-
     final currentSession = sessionProvider.currentSession;
     final existingSetsCount = currentSession?.sets.where((s) => s.exerciseId == exerciseId).length ?? 0;
 
@@ -225,24 +240,20 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
       builder: (ctx) => DraggableScrollableSheet(
         initialChildSize: 0.75, maxChildSize: 0.95, minChildSize: 0.5, expand: false,
         builder: (ctx, scrollController) {
-          final availableExercises = provider.exercises.where((ex) => !_activeExerciseIds.contains(ex.id)).toList();
+          final available = provider.exercises.where((ex) => !_activeExerciseIds.contains(ex.id)).toList();
           return Column(
             children: [
               const Padding(padding: EdgeInsets.all(20.0), child: Text('Dodaj ćwiczenie', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A)))),
               const Divider(color: Color(0xFFE2E8F0), height: 1),
               Expanded(
                 child: ListView.builder(
-                  controller: scrollController, itemCount: availableExercises.length,
+                  controller: scrollController, itemCount: available.length,
                   itemBuilder: (ctx, idx) {
-                    final ex = availableExercises[idx];
+                    final ex = available[idx];
                     return ListTile(
                       leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.fitness_center, color: Color(0xFF10B981), size: 20)),
                       title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0F172A))), subtitle: Text('${ex.targetMuscleGroup} | Sprzęt: ${ex.equipmentType}', style: const TextStyle(color: Color(0xFF64748B))), trailing: const Icon(Icons.add_circle, color: Color(0xFF10B981), size: 28),
-                      onTap: () { 
-                        Navigator.of(ctx).pop(); 
-                        setState(() { _initControllersForExercise(ex.id); }); 
-                        _saveDraftToDisk();
-                      },
+                      onTap: () { Navigator.of(ctx).pop(); setState(() { _initControllersForExercise(ex.id); }); _saveDraftToDisk(); },
                     );
                   },
                 ),
@@ -258,15 +269,13 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
     _stopRestTimer();
     setState(() => _isFinishing = true);
     final sessionProvider = Provider.of<SessionProvider>(context, listen: false);
-    
     try {
-      final finishedSession = await sessionProvider.finishWorkout();
+      final session = await sessionProvider.finishWorkout();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey); 
-
       if (!mounted) return;
       Navigator.of(context).pop(); 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Trening zapisany! Zdobyte punkty: +${finishedSession?.earnedPoints}', style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF10B981)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Zapisano! Punkty Exp: +${session?.earnedPoints}', style: const TextStyle(fontWeight: FontWeight.bold)), backgroundColor: const Color(0xFF10B981)));
     } catch (_) {
       if (mounted) setState(() => _isFinishing = false);
     }
@@ -305,7 +314,6 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
                 ),
               ),
             ),
-
           Expanded(
             child: _activeExerciseIds.isEmpty
                 ? Center(child: Text('Dodaj pierwsze ćwiczenie z górnego paska.', style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w600)))
@@ -330,7 +338,12 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(child: Text('${index + 1}. ${exData?.name ?? 'Ładowanie...'}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF0F172A)))),
-                                    IconButton(icon: aiProvider.isLoading(exerciseId) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF10B981), strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Color(0xFF0EA5E9)), tooltip: 'Rekomendacja AI', onPressed: aiProvider.isLoading(exerciseId) ? null : () => _applyAiSuggestion(exerciseId)),
+                                    Row(
+                                      children: [
+                                        IconButton(icon: aiProvider.isLoading(exerciseId) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFFF59E0B), strokeWidth: 2)) : const Icon(Icons.lightbulb_outline, color: Color(0xFFF59E0B)), tooltip: 'Porady AI Trenera', onPressed: aiProvider.isLoading(exerciseId) ? null : () => _showAiGuidanceModal(exerciseId)),
+                                        IconButton(icon: aiProvider.isLoading(exerciseId) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF10B981), strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Color(0xFF0EA5E9)), tooltip: 'Rekomendacja Ciężaru', onPressed: aiProvider.isLoading(exerciseId) ? null : () => _applyAiSuggestion(exerciseId)),
+                                      ],
+                                    ),
                                   ],
                                 ),
                                 const Divider(color: Color(0xFFF1F5F9), height: 16),
@@ -348,7 +361,18 @@ class _ActiveWorkoutScreenState extends State<ActiveWorkoutScreen> with WidgetsB
                                 Row(
                                   children: [
                                     Expanded(flex: 12, child: TextFormField(controller: _repsControllers[exerciseId], decoration: const InputDecoration(labelText: 'Powt.', isDense: true), keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], onChanged: (_) => _debouncedSaveDraft())), const SizedBox(width: 8),
-                                    Expanded(flex: 12, child: TextFormField(controller: _weightControllers[exerciseId], decoration: const InputDecoration(labelText: 'Kg', isDense: true), keyboardType: const TextInputType.numberWithOptions(decimal: true), onChanged: (_) => _debouncedSaveDraft())), const SizedBox(width: 8),
+                                    Expanded(
+                                      flex: 12, 
+                                      child: TextFormField(
+                                        controller: _weightControllers[exerciseId], 
+                                        decoration: const InputDecoration(
+                                          labelText: 'Kg', isDense: true,
+                                        ), 
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true), 
+                                        onChanged: (_) => _debouncedSaveDraft(),
+                                      ),
+                                    ), 
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       flex: 11,
                                       child: DropdownButtonFormField<int?>(

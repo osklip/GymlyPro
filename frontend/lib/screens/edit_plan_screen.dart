@@ -6,6 +6,7 @@ import '../models/workout_plan.dart';
 import '../models/exercise.dart';
 import '../providers/workout_provider.dart';
 import '../providers/exercise_provider.dart';
+import '../providers/ai_provider.dart';
 
 class EditPlanDraftExercise {
   Exercise? selectedExercise;
@@ -68,7 +69,6 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
       emptyDraft.repsController.text = '10';
       _draftExercises.add(emptyDraft);
     }
-
     setState(() {});
   }
 
@@ -95,14 +95,65 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
     });
   }
 
+  Future<void> _showAiSubstituteModal(EditPlanDraftExercise draft, List<Exercise> available) async {
+    final aiProvider = Provider.of<AiProvider>(context, listen: false);
+    try {
+      final subData = await aiProvider.fetchSubstitutes(draft.selectedExercise!.id);
+      if (!mounted) return;
+
+      final List<Exercise> substitutes = available.where((e) => subData.substituteExerciseIds.contains(e.id)).toList();
+
+      showModalBottomSheet(
+        context: context, backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        builder: (ctx) => Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6), size: 28), SizedBox(width: 12),
+                  Text('Zamienniki AI', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(subData.reasoning, style: const TextStyle(fontSize: 13, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+              const Divider(height: 32, color: Color(0xFFE2E8F0)),
+              if (substitutes.isEmpty)
+                const Center(child: Text('Brak bezpiecznych zamienników w Atlasie.', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)))
+              else
+                ...substitutes.map((ex) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Card(
+                    color: const Color(0xFFF8FAFC), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFE2E8F0))),
+                    child: ListTile(
+                      title: Text(ex.name, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                      subtitle: Text(ex.equipmentType, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+                      trailing: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF8B5CF6), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                        onPressed: () {
+                          setState(() => draft.selectedExercise = ex);
+                          Navigator.of(ctx).pop();
+                        },
+                        child: const Text('ZAMIEŃ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ),
+                )),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _submitUpdatedPlan() async {
     if (!(_formKey.currentState?.validate() ?? false) || _draftExercises.isEmpty) return;
 
     for (var d in _draftExercises) {
       if (d.selectedExercise == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Wybierz ćwiczenie w każdym wierszu.'), backgroundColor: Color(0xFFEF4444)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Wybierz ćwiczenie w każdym wierszu.'), backgroundColor: Color(0xFFEF4444)));
         return;
       }
     }
@@ -115,42 +166,29 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
         final d = _draftExercises[i];
         double? tw;
         final weightText = d.weightController.text.trim().replaceAll(',', '.');
-        if (weightText.isNotEmpty) {
-          tw = double.tryParse(weightText);
-        }
+        if (weightText.isNotEmpty) tw = double.tryParse(weightText);
+        
         exercises.add(PlanExercise(
           id: widget.plan.exercises.length > i ? widget.plan.exercises[i].id : null,
-          planId: widget.plan.id,
-          exerciseId: d.selectedExercise!.id,
-          order: i + 1,
-          targetSets: int.parse(d.setsController.text.trim()),
-          targetReps: int.parse(d.repsController.text.trim()),
-          targetWeight: tw,
+          planId: widget.plan.id, exerciseId: d.selectedExercise!.id, order: i + 1,
+          targetSets: int.parse(d.setsController.text.trim()), targetReps: int.parse(d.repsController.text.trim()), targetWeight: tw,
         ));
       }
 
       final updatedPlan = WorkoutPlan(
-        id: widget.plan.id,
-        userId: widget.plan.userId,
-        name: _planNameController.text.trim(),
-        isActive: widget.plan.isActive,
-        createdAt: widget.plan.createdAt,
-        exercises: exercises,
+        id: widget.plan.id, userId: widget.plan.userId, name: _planNameController.text.trim(),
+        isActive: widget.plan.isActive, createdAt: widget.plan.createdAt, exercises: exercises,
       );
 
       await Provider.of<WorkoutProvider>(context, listen: false).updatePlan(updatedPlan);
       if (!mounted) return;
-      Navigator.of(context).pop(); // Zamknij kreator edycji
-      Navigator.of(context).pop(); // Zamknij stary widok szczegółów planu
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Szablon zaktualizowany pomyślnie!'), backgroundColor: Color(0xFF10B981)),
-      );
+      Navigator.of(context).pop(); 
+      Navigator.of(context).pop(); 
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Szablon zaktualizowany pomyślnie!'), backgroundColor: Color(0xFF10B981)));
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: const Color(0xFFEF4444)),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Błąd zapisu: $e'), backgroundColor: const Color(0xFFEF4444)));
       }
     }
   }
@@ -158,50 +196,41 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
   @override
   Widget build(BuildContext context) {
     final exerciseProv = Provider.of<ExerciseProvider>(context);
+    final aiProv = Provider.of<AiProvider>(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edycja Planu', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.check, color: Color(0xFF10B981), size: 28),
-            onPressed: _isSaving ? null : _submitUpdatedPlan,
-          ),
+          IconButton(icon: const Icon(Icons.check, color: Color(0xFF10B981), size: 28), onPressed: _isSaving ? null : _submitUpdatedPlan),
           const SizedBox(width: 12),
         ],
       ),
       body: exerciseProv.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
-          : _buildForm(exerciseProv.exercises),
+          : _buildForm(exerciseProv.exercises, aiProv),
     );
   }
 
-  Widget _buildForm(List<Exercise> available) {
+  Widget _buildForm(List<Exercise> available, AiProvider aiProv) {
     return Form(
       key: _formKey,
       child: ListView(
         padding: const EdgeInsets.all(20.0),
         children: [
           TextFormField(
-            controller: _planNameController,
-            decoration: const InputDecoration(labelText: 'Nazwa planu'),
+            controller: _planNameController, decoration: const InputDecoration(labelText: 'Nazwa planu'),
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF0F172A)),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Wymagane' : null,
           ),
           const SizedBox(height: 24),
           const Text('PRZYPISANE RUCHY', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Color(0xFF64748B))),
           const SizedBox(height: 12),
-          ..._draftExercises.asMap().entries.map((e) => _buildCard(e.key, e.value, available)),
+          ..._draftExercises.asMap().entries.map((e) => _buildCard(e.key, e.value, available, aiProv)),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: _addExerciseRow,
-            icon: const Icon(Icons.add, color: Color(0xFF10B981)),
-            label: const Text('DODAJ KOLEJNE ĆWICZENIE', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              side: const BorderSide(color: Color(0xFF10B981), width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
+            onPressed: _addExerciseRow, icon: const Icon(Icons.add, color: Color(0xFF10B981)), label: const Text('DODAJ KOLEJNE ĆWICZENIE', style: TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF10B981))),
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), side: const BorderSide(color: Color(0xFF10B981), width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
           ),
           const SizedBox(height: 40),
         ],
@@ -209,7 +238,7 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
     );
   }
 
-  Widget _buildCard(int idx, EditPlanDraftExercise draft, List<Exercise> available) {
+  Widget _buildCard(int idx, EditPlanDraftExercise draft, List<Exercise> available, AiProvider aiProv) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16.0),
       child: Padding(
@@ -221,23 +250,32 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('POZYCJA #${idx + 1}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: Color(0xFF0EA5E9))),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 20),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _removeExerciseRow(idx),
-                ),
+                IconButton(icon: const Icon(Icons.close, color: Color(0xFF94A3B8), size: 20), visualDensity: VisualDensity.compact, onPressed: () => _removeExerciseRow(idx)),
               ],
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<Exercise>(
-              decoration: const InputDecoration(labelText: 'Wybierz z Atlasu'),
-              value: available.any((e) => e.id == draft.selectedExercise?.id) ? available.firstWhere((e) => e.id == draft.selectedExercise?.id) : null,
-              dropdownColor: Colors.white,
-              icon: const Icon(Icons.keyboard_arrow_down),
-              style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF0F172A), fontSize: 15),
-              items: available.map((ex) => DropdownMenuItem<Exercise>(value: ex, child: Text(ex.name))).toList(),
-              onChanged: (v) => setState(() => draft.selectedExercise = v),
-              validator: (v) => v == null ? 'Wybierz' : null,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<Exercise>(
+                    decoration: const InputDecoration(labelText: 'Wybierz z Atlasu'),
+                    initialValue: available.any((e) => e.id == draft.selectedExercise?.id) ? available.firstWhere((e) => e.id == draft.selectedExercise?.id) : null,
+                    dropdownColor: Colors.white, icon: const Icon(Icons.keyboard_arrow_down), style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF0F172A), fontSize: 15),
+                    items: available.map((ex) => DropdownMenuItem<Exercise>(value: ex, child: Text(ex.name))).toList(),
+                    onChanged: (v) => setState(() => draft.selectedExercise = v), validator: (v) => v == null ? 'Wybierz' : null,
+                  ),
+                ),
+                if (draft.selectedExercise != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, top: 12.0),
+                    child: IconButton(
+                      icon: aiProv.isLoading(draft.selectedExercise!.id) ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Color(0xFF8B5CF6), strokeWidth: 2)) : const Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6)),
+                      tooltip: 'AI: Znajdź zamiennik',
+                      onPressed: aiProv.isLoading(draft.selectedExercise!.id) ? null : () => _showAiSubstituteModal(draft, available),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 12),
             Row(
